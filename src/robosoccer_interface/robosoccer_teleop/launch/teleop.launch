@@ -1,0 +1,3 @@
+<launch>
+    <node name="robosoccer_teleop" pkg="robosoccer_teleop" type="robosoccer_teleop_node.py"/>
+</launch>
