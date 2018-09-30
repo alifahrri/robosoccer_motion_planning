@@ -1,9 +1,62 @@
 import velocitypublisher as velpub
+import robotsubscriber as robosub
 import teleopdialog as dialog
 import math
+import rospy
 from PyQt5 import QtWidgets, QtGui, QtCore
 
 N_ROBOT = 5
+
+class LinesItem(QtWidgets.QGraphicsItem) :
+    def __init__(self, *args, **kwargs):
+        QtWidgets.QGraphicsItem.__init__(self,None)
+        self.WIDTH = 2000
+        self.HEIGHT = 1400
+        self.STEP = 60
+        self.h_lines = []
+        self.v_lines = []
+        self.waypoints = []
+        WIDTH = self.WIDTH
+        HEIGHT = self.HEIGHT
+        STEP = self.STEP
+        for i in range(WIDTH/STEP) :
+            line = QtCore.QLineF(i*STEP-WIDTH/2,-HEIGHT/2,i*STEP-WIDTH/2,HEIGHT/2)
+            self.v_lines.append(line)
+        for i in range(HEIGHT/STEP) :
+            line = QtCore.QLineF(-WIDTH/2,i*STEP-HEIGHT/2,WIDTH/2,i*STEP-HEIGHT/2)
+            self.h_lines.append(line)
+        
+    def paint(self, painter, option, style) :
+        painter.setPen(QtCore.Qt.lightGray)
+        painter.setBrush(QtCore.Qt.NoBrush)
+        painter.drawLines(self.v_lines)
+        painter.drawLines(self.h_lines)
+        for i in range(len(self.waypoints)) :
+            p1 = self.waypoints[i]
+            painter.setPen(QtCore.Qt.black)
+            painter.setBrush(QtCore.Qt.black)
+            painter.drawEllipse(p1, 10.0, 10.0)
+            if i > 0 :
+                p0 = self.waypoints[i-1]
+                painter.drawLine(p0, p1)
+            font = painter.font()
+            font.setPixelSize(12)
+            painter.setFont(font)
+            painter.setPen(QtCore.Qt.green)
+            painter.drawText(p1, str(i))
+
+    def mousePressEvent(self, event) :
+        self.waypoints.append(event.pos())
+        if not (self.scene() is None) :
+            self.scene().update()
+
+    def mouseDoubleClickEvent(self, event) :
+        del self.waypoints[:]
+        if not (self.scene() is None) :
+            self.scene().update()
+
+    def boundingRect(self) :
+        return QtCore.QRectF(-self.WIDTH/2,-self.HEIGHT/2,self.WIDTH,self.HEIGHT)
 
 class MasterVelocity(QtWidgets.QGraphicsItem) :
     def __init__(self, *args, **kwargs):
@@ -11,7 +64,7 @@ class MasterVelocity(QtWidgets.QGraphicsItem) :
         self.vx = 0.0
         self.vy = 0.0
         self.point = QtCore.QPointF(0.0,0.0)
-        self.rotation_point = QtCore.QPointF(0.0,-125.0)
+        self.rotation_point = QtCore.QPointF(0.0, 125.0)
         self.w = 0.0
 
     def paint(self, painter, option, style) :
@@ -21,20 +74,22 @@ class MasterVelocity(QtWidgets.QGraphicsItem) :
         painter.drawEllipse(-125.0, -125.0, 250.0, 250.0)
         painter.setPen(QtGui.QColor('red'))
         painter.setBrush(QtGui.QColor('red'))
-        arc_angle = QtCore.QLineF(QtCore.QPointF(0.0,0.0),self.rotation_point).angle() - 90.0
-        rect = QtCore.QRectF(-125.0, -125.0, 250.0, 250.0)
-        if arc_angle > 180.0 :
-            span = 360 - arc_angle
-            arc_angle = arc_angle - 360.0 + 90
-            painter.drawArc(rect, arc_angle * 16, span)
-        else :
-            painter.drawArc(rect, 90.0 * 16, arc_angle * 16)
         painter.drawEllipse(self.point, 5.0, 5.0)
         painter.setPen(QtGui.QColor('green'))
         painter.setBrush(QtGui.QColor('green'))
         painter.drawEllipse(self.rotation_point, 5.0, 5.0)
+        painter.rotate(-90.0)
+        arc_angle = QtCore.QLineF(QtCore.QPointF(0.0,0.0),self.rotation_point).angle()
+        rect = QtCore.QRectF(-125.0, -125.0, 250.0, 250.0)
+        if arc_angle > 180.0 :
+            span = 360 - arc_angle
+            arc_angle = arc_angle - 360.0
+            painter.drawArc(rect, arc_angle * 16, span)
+        else :
+            painter.drawArc(rect, 0.0 * 16, arc_angle * 16)
     
     def mousePressEvent(self, event) :
+        self.mouse_btn = event.button()
         if event.button() == QtCore.Qt.LeftButton :
             self.point = event.pos()
             self.vx = self.point.x()
@@ -48,20 +103,20 @@ class MasterVelocity(QtWidgets.QGraphicsItem) :
             self.scene().update()
 
     def mouseMoveEvent(self, event) :
-        if event.button() == QtCore.Qt.LeftButton :
+        if self.mouse_btn == QtCore.Qt.LeftButton :
             self.point = event.pos()
             self.vx = self.point.x()
             self.vy = self.point.y()
-        elif event.button() == QtCore.Qt.RightButton :
+        elif self.mouse_btn == QtCore.Qt.RightButton :
             pos = QtCore.QLineF(QtCore.QPointF(0.0,0.0), event.pos())
             pos.setLength(125.0)
             self.w = math.radians(pos.angle())
-            self.rotation_point = pos
+            self.rotation_point = pos.p2()
         if not (self.scene() is None) :
             self.scene().update()
 
     def boundingRect(self) :
-        return QtCore.QRectF(-150,-150,300,300)
+        return QtCore.QRectF(-130,-130,260,260)
 
 class TeleopGUI(object) :
     def __init__(self, *args, **kwargs):
@@ -70,17 +125,32 @@ class TeleopGUI(object) :
         self.ui.setupUi(self.widget)
         self.bot_velpub = []
         self.foe_velpub = []
+        self.bot_sub = []
+        self.foe_sub = []
         self.master_vel = MasterVelocity()
         self.scene = QtWidgets.QGraphicsScene(-200.0,-200.0,400,400,self.widget)
         self.scene.addItem(self.master_vel)
         self.ui.graphicsView.setScene(self.scene)
         self.ui.graphicsView.setRenderHint(QtGui.QPainter.Antialiasing)
-        keys = ['stop', 'master', 'circular']
+        self.wp_scene = QtWidgets.QGraphicsScene(-900,-600,1800,1200)
+        self.lines_item = LinesItem()
+        self.wp_scene.addItem(self.lines_item)
+        self.ui.wp_graphicsView.setScene(self.wp_scene)
+        self.ui.wp_graphicsView.setRenderHint(QtGui.QPainter.Antialiasing)
+        FIELD_SCALE = 0.5
+        self.ui.wp_graphicsView.scale(FIELD_SCALE, FIELD_SCALE)
+        keys = ['stop', 'master', 'circular', 'waypoint']
         for i in range(N_ROBOT) :
             bot_topic = '/nubot'+str(i+1)+'/nubotcontrol/velcmd'
             foe_topic = '/rival'+str(i+1)+'/nubotcontrol/velcmd'
             self.bot_velpub.append(velpub.VelocityPublisher(bot_topic))
             self.foe_velpub.append(velpub.VelocityPublisher(foe_topic))
+            bot_topic = '/nubot'+str(i+1)+'/omnivision/OmniVisionInfo'
+            foe_topic = '/rival'+str(i+1)+'/omnivision/OmniVisionInfo'
+            self.bot_sub.append(robosub.RobotItem(bot_topic, i+1))
+            self.foe_sub.append(robosub.RobotItem(foe_topic, i+1, flip=-1))
+            self.wp_scene.addItem(self.bot_sub[i])
+            self.wp_scene.addItem(self.foe_sub[i])
         for key in keys :
             self.ui.bot_comboBox_1.addItem(key)
             self.ui.bot_comboBox_2.addItem(key)
@@ -92,6 +162,13 @@ class TeleopGUI(object) :
             self.ui.foe_comboBox_3.addItem(key)
             self.ui.foe_comboBox_4.addItem(key)
             self.ui.foe_comboBox_5.addItem(key)
+        for i in range(len(self.bot_sub)) :
+            self.ui.wp_comboBox.addItem('bot %s'%(i+1))
+        for i in range(len(self.foe_sub)) :
+            self.ui.wp_comboBox.addItem('foe %s'%(i+1))
+        self.ui.wp_setBtn.clicked.connect(self.setWaypoints)
+        self.ui.wp_clearBtn.clicked.connect(self.clearWaypoints)
+        self.widget.setWindowTitle('Teleoperation')
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.update)
         self.timer.start(100)
@@ -106,8 +183,43 @@ class TeleopGUI(object) :
             angle_rate = (bot_config[3][i], foe_config[3][i])
             self.bot_velpub[i].update(enabled[0], key=key[0], vmax=vm[0], angle_rate=angle_rate[0], vx=mvx, vy=mvy, w=w)
             self.foe_velpub[i].update(enabled[1], key=key[1], vmax=vm[1], angle_rate=angle_rate[1], vx=mvx, vy=mvy, w=w)
+            bot_err = self.bot_velpub[i].pidControl(self.bot_sub[i].target(), self.bot_sub[i].pose())
+            foe_err = self.foe_velpub[i].pidControl(self.foe_sub[i].target(), self.foe_sub[i].pose())
+            MIN_ERROR = 10.0
+            if not (bot_err is None) :
+                if bot_err[0] < MIN_ERROR :
+                    self.bot_sub[i].nextTarget()
+            if not (foe_err is None) :
+                if foe_err[0] < MIN_ERROR :
+                    self.foe_sub[i].nextTarget()
             self.bot_velpub[i].publish()
             self.foe_velpub[i].publish()
+        self.wp_scene.update()
+        if rospy.is_shutdown() :
+            self.widget.close()
+
+    def setWaypoints(self) :
+        i = self.ui.wp_comboBox.currentIndex()
+        if i < 0 :
+            return
+        wp = self.lines_item.waypoints
+        if i < 5 :
+            self.bot_sub[i].setWaypoints(wp)
+        else :
+            i = i % len(self.foe_sub)
+            self.foe_sub[i].setWaypoints(wp)
+        del self.lines_item.waypoints[:]
+    
+    def clearWaypoints(self) :
+        i = self.ui.wp_comboBox.currentIndex()
+        if i < 0 :
+            return
+        del self.lines_item.waypoints[:]
+        if i < 5 :
+            self.bot_sub[i].setWaypoints(None)
+        else :
+            i = i % len(self.foe_sub)
+            self.foe_sub[i].setWaypoints(None)
 
     def get_gui_config(self) :
         bot_vm = []
@@ -143,11 +255,11 @@ class TeleopGUI(object) :
         bot_key.append(self.ui.bot_comboBox_3.currentText())
         bot_key.append(self.ui.bot_comboBox_4.currentText())
         bot_key.append(self.ui.bot_comboBox_5.currentText())
-        foe_key.append(self.ui.bot_comboBox_1.currentText())
-        foe_key.append(self.ui.bot_comboBox_2.currentText())
-        foe_key.append(self.ui.bot_comboBox_3.currentText())
-        foe_key.append(self.ui.bot_comboBox_4.currentText())
-        foe_key.append(self.ui.bot_comboBox_5.currentText())
+        foe_key.append(self.ui.foe_comboBox_1.currentText())
+        foe_key.append(self.ui.foe_comboBox_2.currentText())
+        foe_key.append(self.ui.foe_comboBox_3.currentText())
+        foe_key.append(self.ui.foe_comboBox_4.currentText())
+        foe_key.append(self.ui.foe_comboBox_5.currentText())
         bot_rate.append(self.ui.bot_angle_rate_doubleSpinBox_1.value())
         bot_rate.append(self.ui.bot_angle_rate_doubleSpinBox_2.value())
         bot_rate.append(self.ui.bot_angle_rate_doubleSpinBox_3.value())
