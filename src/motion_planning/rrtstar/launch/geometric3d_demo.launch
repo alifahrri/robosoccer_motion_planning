@@ -1,0 +1,4 @@
+<launch>
+  <node name="rrtstar_geometric2d" pkg="rrtstar" load="rrtstar_geometric2d"/>
+  <node name="rviz" pkg="rviz" load="rviz"/>
+</launch>

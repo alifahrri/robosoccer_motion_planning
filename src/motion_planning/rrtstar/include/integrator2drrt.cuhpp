@@ -1,0 +1,350 @@
+#ifndef INTEGRATOR2DRRT_CUHPP
+#define INTEGRATOR2DRRT_CUHPP
+
+#include "integrator2drrt.hpp"
+#include "integrator2d.cuhpp"
+#include "environment.cuhpp"
+
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+#ifndef gpuErrchk
+#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+  if (code != cudaSuccess)
+  {
+    fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+    if (abort) exit(code);
+  }
+}
+#endif
+
+#include "util.h"
+// some manual function print to trace execution
+// this NDEBUG is from cmake when on {RELEASE or MINSIZEREL} mode
+#ifndef NDEBUG
+#define TRACE_EXEC
+#define TRACE_VAL
+#endif
+
+namespace Kinodynamic {
+
+struct BatchCollisionTimeSpaceChecker
+{
+  typedef Trajectory<scalar,state_t,segment> Edge;
+  typedef scalar Scalar;
+
+  BatchCollisionTimeSpaceChecker(ModelsGPU::SolverGPU& solver, DynamicRobosoccerGPU<scalar,obs_count> &env)
+    : solver(solver), env(env)
+  {
+    rg = new RandomGen<4,scalar>(
+    {-SAMPLE_X0,-SAMPLE_X1,-SAMPLE_X2,-SAMPLE_X3},
+    {SAMPLE_X0,SAMPLE_X1,SAMPLE_X2,SAMPLE_X3}
+          );
+  }
+
+  __host__
+  void setRandomObstacles() {
+#ifdef TRACE_EXEC
+    TRACE_FN(__PRETTY_FUNCTION__);
+#endif
+    for(auto& o : env.obs) {
+      (*rg)(o);
+    }
+  }
+
+  template <int x_idx = 0, int y_idx = 1, typename iStateArray, typename fStateArray, typename DynamicArray>
+  inline
+  void check(const iStateArray &s0, const fStateArray &s1, DynamicArray &edges, std::vector<bool> &collision, std::vector<scalar> &costs)
+  {
+#ifdef TRACE_EXEC
+    TRACE_FN(__PRETTY_FUNCTION__);
+#endif
+    std::vector<state_t > test_pt0, test_pt1;
+    std::vector<scalar> test_t0, test_t1;
+    // ModelsGPU::SolverGPU solver;
+    auto trajectory_inserter = [&](ModelsGPU::Scalar *t_begin, ModelsGPU::Scalar *t_end,
+        ModelsGPU::State *s_begin, ModelsGPU::State *s_end,
+        ModelsGPU::Input *i_begin, ModelsGPU::Input *i_end)
+    {
+      Connector::Edge e;
+      for(size_t i=0; i<=segment; i++) {
+        e.at(i) = std::make_tuple(*t_begin, *s_begin);
+        if(i>0) {
+          const auto &e0 = e.at(i-1);
+          const auto &e1 = e.at(i);
+          test_t0.push_back(std::get<0>(e0));
+          test_t1.push_back(std::get<0>(e1));
+          test_pt0.push_back(std::get<1>(e0));
+          test_pt1.push_back(std::get<1>(e1));
+        }
+        t_begin++; s_begin++;
+        if((t_begin == t_end) || (s_begin == s_end))
+          break;
+      }
+      edges.push_back(e);
+    };
+    auto cost_inserter = [&](ModelsGPU::Scalar cost, ModelsGPU::Scalar time)
+    {
+      costs.push_back(cost);
+    };
+    solver.solve<segment>(s0, s1, trajectory_inserter, cost_inserter);
+    state_t  *dev_test_pt0;
+    state_t  *dev_test_pt1;
+    scalar *dev_t0;
+    scalar *dev_t1;
+    bool *dev_collision;
+    auto test_n = test_pt0.size();
+    gpuErrchk(cudaMalloc(&dev_test_pt0, test_n*sizeof(state_t )));
+    gpuErrchk(cudaMalloc(&dev_test_pt1, test_n*sizeof(state_t )));
+    gpuErrchk(cudaMalloc(&dev_t0, test_n*sizeof(scalar)));
+    gpuErrchk(cudaMalloc(&dev_t1, test_n*sizeof(scalar)));
+    gpuErrchk(cudaMemcpy(dev_test_pt0, test_pt0.data(), test_n*sizeof(state_t ), cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMemcpy(dev_test_pt1, test_pt1.data(), test_n*sizeof(state_t ), cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMemcpy(dev_t0, test_t0.data(), test_n*sizeof(scalar), cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMemcpy(dev_t1, test_t1.data(), test_n*sizeof(scalar), cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMalloc(&dev_collision, test_n*sizeof(bool)));
+    env.batch_collide<true,x_idx,y_idx,segment,collision_segment>(dev_test_pt0, dev_test_pt1, dev_collision, dev_t0, dev_t1, test_n);
+    bool *host_collision = new bool[test_n];
+    gpuErrchk(cudaMemcpy(host_collision, dev_collision, test_n, cudaMemcpyDeviceToHost));
+    // auto n_collision = test_n/(segment+1);
+    auto n_collision = costs.size();
+    for(size_t i=0; i<n_collision; i++) {
+      auto collide = false;
+      for(size_t j=0; j<segment; j++) {
+        auto id = i*(segment) + j;
+        collide = host_collision[id];
+        if(collide) break;
+      }
+      collision.push_back(collide);
+    }
+    gpuErrchk(cudaFree(dev_test_pt0));
+    gpuErrchk(cudaFree(dev_test_pt1));
+    gpuErrchk(cudaFree(dev_t0));
+    gpuErrchk(cudaFree(dev_t1));
+    gpuErrchk(cudaFree(dev_collision));
+    delete[] host_collision;
+  }
+
+  template <typename StateArray, typename DynamicArray>
+  void operator()(const state_t &s0, const StateArray &states, DynamicArray &edges, std::vector<bool> &collision, std::vector<scalar> &costs)
+  {
+#ifdef TRACE_EXEC
+    TRACE_FN(__PRETTY_FUNCTION__);
+#endif
+    auto n = states.size();
+#ifdef TRACE_VAL
+    DEBUG_PRINT("n",n);
+#endif
+    std::vector<state_t> s0_vec;
+    for(size_t i=0; i<n; i++) s0_vec.push_back(s0);
+    check(s0_vec, states, edges, collision, costs);
+  }
+
+  template <typename StateArray, typename DynamicArray>
+  void operator()(const StateArray &states, const state_t &s1, DynamicArray &edges, std::vector<bool> &collision, std::vector<scalar> &costs)
+  {
+#ifdef TRACE_EXEC
+    TRACE_FN(__PRETTY_FUNCTION__);
+#endif
+    auto n = states.size();
+#ifdef TRACE_VAL
+    DEBUG_PRINT("n",n);
+#endif
+    std::vector<state_t> s1_vec;
+    for(size_t i=0; i<n; i++) s1_vec.push_back(s1);
+    check(states, s1_vec, edges, collision, costs);
+  }
+
+  template <typename Edge>
+  bool operator() (const Edge &e) {
+#ifdef TRACE_EXEC
+    TRACE_FN(__PRETTY_FUNCTION__);
+#endif
+    auto collision = false;
+    for(size_t i=1; i<e.size(); i++) {
+      const auto &ts1 = e[i];
+      const auto &ts0 = e[i-1];
+      const auto &s1 = std::get<1>(ts1);
+      const auto &t1 = std::get<0>(ts1);
+      const auto &s0 = std::get<1>(ts0);
+      const auto &t0 = std::get<0>(ts0);
+      collision = env.collide<0,1>(s0,s1,t0,t1);
+      if(collision) break;
+    }
+    return collision;
+  }
+
+  ModelsGPU::SolverGPU &solver;
+  DynamicRobosoccerGPU<scalar,obs_count> &env;
+  RandomGen<4,scalar> *rg;
+};
+
+struct BatchCollisionChecker
+{
+  typedef Trajectory<scalar,state_t,segment> Edge;
+  typedef scalar Scalar;
+
+  BatchCollisionChecker(ModelsGPU::SolverGPU &solver, RobosoccerGPU<scalar,obs_count> &env)
+    : solver(solver), env(env)
+  {
+    rg = new RandomGen<2,scalar>({-SAMPLE_X0,-SAMPLE_X1},{SAMPLE_X0,SAMPLE_X1});
+  }
+
+  __host__
+  void setRandomObstacles() {
+#ifdef TRACE_EXEC
+    TRACE_FN(__PRETTY_FUNCTION__);
+#endif
+    for(size_t i=0; i<obs_count; i++) {
+      auto &o = env.obs[i];
+      o.x = (*rg)(0);
+      o.y = (*rg)(1);
+    }
+    collisions.clear();
+  }
+
+  template<int x_idx=0, int y_idx=1, typename iStateArray, typename fStateArray, typename DynamicArray>
+  inline
+  void check(const iStateArray &s0, const fStateArray &states, DynamicArray &edges, std::vector<bool> &collision, std::vector<scalar> &costs)
+  {
+#ifdef TRACE_EXEC
+    TRACE_FN(__PRETTY_FUNCTION__);
+#endif
+    std::vector<state_t> test_pt0, test_pt1;
+    auto trajectory_inserter = [&](ModelsGPU::Scalar *t_begin, ModelsGPU::Scalar *t_end,
+        ModelsGPU::State *s_begin, ModelsGPU::State *s_end,
+        ModelsGPU::Input *i_begin, ModelsGPU::Input *i_end)
+    {
+      Connector::Edge e;
+      for(size_t i=0; i<=segment; i++) {
+        e.at(i) = std::make_tuple(*t_begin, *s_begin);
+        t_begin++; s_begin++;
+        if((t_begin == t_end) || (s_begin == s_end))
+          break;
+      }
+      edges.push_back(e);
+    };
+    auto cost_inserter = [&](ModelsGPU::Scalar cost, ModelsGPU::Scalar time)
+    {
+      costs.push_back(cost);
+    };
+    // ModelsGPU::SolverGPU solver;
+    solver.solve<segment>(s0, states, trajectory_inserter, cost_inserter);
+    state_t *dev_test_pt0;
+    state_t *dev_test_pt1;
+    bool *dev_collision;
+    auto test_n = test_pt0.size();
+    gpuErrchk(cudaMalloc(&dev_test_pt0, test_n*sizeof(state_t)));
+    gpuErrchk(cudaMalloc(&dev_test_pt1, test_n*sizeof(state_t)));
+    gpuErrchk(cudaMemcpy(dev_test_pt0, test_pt0.data(), test_n*sizeof(state_t ), cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMemcpy(dev_test_pt1, test_pt1.data(), test_n*sizeof(state_t ), cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMalloc(&dev_collision, test_n*sizeof(state_t )));
+    // call batch collision check with pointer already allocated on device
+    // with x index 0, and y index 1
+    env.batch_collide<true,x_idx,y_idx>(dev_test_pt0, dev_test_pt1, dev_collision, test_n);
+    bool *host_collision = new bool[test_n];
+    gpuErrchk(cudaMemcpy(host_collision, dev_collision, test_n, cudaMemcpyDeviceToHost));
+    auto n_collision = test_n/(segment+1);
+    for(size_t i=0; i<n_collision; i++) {
+      auto collide = false;
+      for(size_t j=0; j<=segment; j++) {
+        auto id = i*segment + j;
+        collide = host_collision[id];
+        if(collide) break;
+      }
+      collision.push_back(collide);
+    }
+    gpuErrchk(cudaFree(dev_test_pt0));
+    gpuErrchk(cudaFree(dev_test_pt1));
+    gpuErrchk(cudaFree(dev_collision));
+    delete[] host_collision;
+  }
+
+  template <typename StateArray, typename DynamicArray>
+  void operator() (const state_t &s0, const StateArray &states, DynamicArray &edges, std::vector<bool> &collision, std::vector<scalar> &costs)
+  {
+#ifdef TRACE_EXEC
+    TRACE_FN(__PRETTY_FUNCTION__);
+#endif
+    auto n = states.size();
+#ifdef TRACE_VAL
+    DEBUG_PRINT("n",n);
+#endif
+    std::vector<state_t> s0_vec;
+    for(size_t i=0; i<n; i++) s0_vec.push_back(s0);
+    check(s0_vec, states, edges, collision, costs);
+  }
+
+  template <typename StateArray, typename DynamicArray>
+  void operator() (const StateArray &states, const state_t &s1, DynamicArray &edges, std::vector<bool> &collision, std::vector<scalar> &costs)
+  {
+#ifdef TRACE_EXEC
+    TRACE_FN(__PRETTY_FUNCTION__);
+#endif
+    auto n = states.size();
+#ifdef TRACE_VAL
+    DEBUG_PRINT("n",n);
+#endif
+    std::vector<state_t> s1_vec;
+    for(size_t i=0; i<n; i++) s1_vec.push_back(s1);
+    check(states, s1_vec, edges, collision, costs);
+  }
+
+  template <typename Edge>
+  bool operator() (const Edge &e) {
+#ifdef TRACE_EXEC
+    TRACE_FN(__PRETTY_FUNCTION__);
+#endif
+#ifdef NO_OBS
+    return false;
+#else
+    auto path = e.path();
+    bool collision = false;
+    for(size_t i=1; i<path.size(); i++) {
+      const auto &p0 = path[i-1];
+      const auto &p1 = path[i];
+      if(env.collide(p0) || env.collide(p1))
+        collision = true;
+      if(env.collide(path[i-1],path[i]))
+        collision = true;
+      if(collision)
+        break;
+    }
+    /*
+    if(collision)
+      collisions.push_back(std::make_tuple(path.front(),path.back()));
+      */
+    return collision;
+#endif
+  }
+
+  std::vector<std::tuple<state_t,state_t>> collisions;
+  ModelsGPU::SolverGPU &solver;
+  RobosoccerGPU<scalar,obs_count> &env;
+  RandomGen<2,scalar> *rg;
+};
+
+typedef RobosoccerGPU<scalar,obs_count> StaticEnvironmentGPU;
+typedef DynamicRobosoccerGPU<scalar,obs_count> DynamicEnvironmentGPU;
+StaticEnvironmentGPU robosoccer_env_cuda;
+DynamicEnvironmentGPU dynamic_soccer_env_cuda;
+
+ModelsGPU::SolverGPU solver_cuda;
+BatchCollisionChecker batch_checker(solver_cuda, robosoccer_env_cuda);
+BatchCollisionTimeSpaceChecker time_space_batch_checker(solver_cuda, dynamic_soccer_env_cuda);
+
+typedef RRTStarBatch
+<TreeInt2D,Sampler<StaticEnvironment>,NeighborRadius,BatchCollisionChecker,GoalChecker<StaticEnvironment>>
+RRTStarBatchInt2D;
+
+typedef RRTStarBatch
+<TreeInt2D,Sampler<DynamicEnvironment>,NeighborRadius,BatchCollisionTimeSpaceChecker,GoalChecker<DynamicEnvironment>>
+RRTStarBatchInt2DTimeSpaceObs;
+
+RRTStarBatchInt2D rrtstar_batch_int2d(tree_int2d, sampler, batch_checker, radius, goal);
+RRTStarBatchInt2DTimeSpaceObs rrtstar_batch_int2d_timespace_obs(tree_int2d, sampler_dynamic_env, time_space_batch_checker, radius, goal_dynamic_env);
+}
+
+#endif // INTEGRATOR2DRRT_CUHPP

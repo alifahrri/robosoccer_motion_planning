@@ -1,0 +1,4 @@
+<launch>
+  <node name="rrtstar_integrator2d_dynamic_test" pkg="rrtstar" type="rrtstar_integrator2d_dynamic_test"/>
+  <node name="rviz" pkg="rviz" type="rviz"/>
+</launch>

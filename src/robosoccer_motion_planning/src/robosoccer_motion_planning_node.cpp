@@ -64,12 +64,12 @@ int main(int argc, char **argv)
       ROS_INFO("adding visual..");
       auto r = Kinodynamic::checker.env.collision_radius;
       for(const auto &o : Kinodynamic::checker.env.obs)
-        vis.add_circles(std::get<0>(o),std::get<1>(o),r);
-      vis.add_trajectories(tree.tree.cloud.states, tree.trajectories, tree.parent, 2, tree.tree.size());
+        vis.add_obstacles(std::get<0>(o),std::get<1>(o),r);
+      vis.set_trajectories(tree.tree.cloud.states, tree.trajectories, tree.parent, 2, tree.tree.size());
       if(solved) {
         auto goal_trj = tree.get_trajectory(rrt.goalIndex());
         for(const auto &t : goal_trj)
-          vis.add_trajectory(t.path(),2);
+          vis.set_trajectory(t.path(),2);
       }
       ROS_INFO("publish visual..");
       vis.publish();

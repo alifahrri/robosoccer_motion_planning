@@ -1,0 +1,142 @@
+#ifndef FIXEDTIMELQR_CUHPP
+#define FIXEDTIMELQR_CUHPP
+
+#include "fixedtimelqr.hpp"
+
+#include <cuda.h>
+#include <cuda_runtime.h>
+#ifndef gpuErrchk
+#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+  if (code != cudaSuccess)
+  {
+    fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+    if (abort) exit(code);
+  }
+}
+#endif
+#define ATTRIBUTE __host__ __device__
+
+template <typename Scalar, typename State, typename Input>
+struct TrajectoryGPU
+{
+  Scalar *time;
+  State *states;
+  Input *inputs;
+  size_t n;
+  size_t segment;
+};
+
+template <typename Scalar, typename State, typename Input>
+__host__
+inline void allocate_trajectory(TrajectoryGPU<Scalar,State,Input> *host, TrajectoryGPU<Scalar,State,Input> *dev, size_t n, size_t segment = 10) {
+  auto ns = n*segment;
+  host->n = n;
+  host->segment = segment;
+  host->time = (Scalar*) malloc(ns * sizeof(Scalar));
+  host->inputs = (Input*) malloc(ns * sizeof(Input));
+  host->states = (State*) malloc(ns * sizeof(State));
+  dev->n = n;
+  dev->segment = segment;
+  gpuErrchk(cudaMalloc(&(dev->time), ns*sizeof(Scalar)));
+  gpuErrchk(cudaMalloc(&(dev->states), ns*sizeof(State)));
+  gpuErrchk(cudaMalloc(&(dev->inputs), ns*sizeof(Input)));
+}
+
+template <typename Scalar, typename State, typename Input>
+__host__
+inline void free_trajectory(TrajectoryGPU<Scalar,State,Input> *host, TrajectoryGPU<Scalar,State,Input> *dev) {
+  delete host->time;
+  delete host->inputs;
+  delete host->states;
+  gpuErrchk(cudaFree(dev->time));
+  gpuErrchk(cudaFree(dev->states));
+  gpuErrchk(cudaFree(dev->inputs));
+}
+
+template <typename Scalar, typename State, typename Input>
+__host__
+inline void copy_trajectory(TrajectoryGPU<Scalar,State,Input> *dst, TrajectoryGPU<Scalar,State,Input> *src, cudaMemcpyKind kind)
+{
+  auto ns = (dst->n) * (dst->segment);
+  gpuErrchk(cudaMemcpy(dst->time, src->time, ns*sizeof(Scalar), kind));
+  gpuErrchk(cudaMemcpy(dst->states, src->states, ns*sizeof(State), kind));
+  gpuErrchk(cudaMemcpy(dst->inputs, src->inputs, ns*sizeof(Input), kind));
+}
+
+template <typename Scalar>
+struct CostGPU
+{
+  Scalar *time;
+  Scalar *cost;
+  size_t n;
+};
+
+template <typename Scalar>
+inline void allocate_cost(CostGPU<Scalar> *host, CostGPU<Scalar> *dev, size_t n)
+{
+  host->time = new Scalar[n];
+  host->cost = new Scalar[n];
+  host->n = n;
+  gpuErrchk(cudaMalloc(&(dev->cost),n*sizeof(Scalar)));
+  gpuErrchk(cudaMalloc(&(dev->time),n*sizeof(Scalar)));
+  dev->n = n;
+}
+
+template <typename Scalar>
+inline void free_cost(CostGPU<Scalar> *host, CostGPU<Scalar> *dev)
+{
+  delete host->cost;
+  delete host->time;
+  gpuErrchk(cudaFree(dev->cost));
+  gpuErrchk(cudaFree(dev->time));
+}
+
+template <typename Scalar>
+inline void copy_cost(CostGPU<Scalar> *dst, CostGPU<Scalar> *src, cudaMemcpyKind kind)
+{
+  gpuErrchk(cudaMemcpy(dst->cost,src->cost,dst->n*sizeof(Scalar),kind));
+  gpuErrchk(cudaMemcpy(dst->time,src->time,dst->n*sizeof(Scalar),kind));
+}
+
+// separate definition for GPU because it turns out class definition is (maybe) too big for device code
+// define composite state first, because it is used internally there's no way to deduce automatically
+template <typename CompositeState, int segment = 10, typename State, typename OptTimeSolver, typename Gramian, typename SystemExpm, typename CompositeSystemExpm, typename InputWeight, typename InputMatrix, typename Trajectory>
+ATTRIBUTE
+inline void solve_trajectory(const State& xi, const State& xf, const OptTimeSolver &opt_time_solver, const Gramian &G, const SystemExpm &system_expm, const CompositeSystemExpm &cmp_sys_expm, const InputWeight &R, const InputMatrix &B, Trajectory &ret, size_t id = 0)
+{
+  auto opt_time = opt_time_solver(xi,xf);
+  auto dt = opt_time/segment;
+  auto d_opt = G(opt_time).inverse()*(xf-system_expm(opt_time)*xi);
+  CompositeState cmp_state;
+  cmp_state << xf, d_opt;
+  for(int i=0; i<=segment; i++) {
+    auto t = opt_time*i/segment;
+    auto em = cmp_sys_expm(t-opt_time);
+    CompositeState s = em*cmp_state;
+    State state, yt;
+    for(int k=0; k<s.rows()/2; k++)
+      state(k) = s(k);
+    for(int k=s.rows()/2; k<s.rows(); k++)
+      yt(k-s.rows()/2) = s(k);
+    auto ctrl = R.inverse() * B.transpose() * yt;
+    ret.time[id*(segment+1)+i] = t;
+    ret.states[id*(segment+1)+i] = state;
+    ret.inputs[id*(segment+1)+i] = ctrl;
+  }
+}
+
+template<typename scalar=double, typename State, typename OptTimeSolver, typename CostFN>
+ATTRIBUTE
+inline void compute_cost(const State& xi, const State& xf, CostGPU<scalar> &ret, const OptTimeSolver &opt_time_solver, const CostFN &cost_fn, size_t id)
+{
+  if(xi != xf) {
+    auto t = opt_time_solver(xi,xf);
+    auto c = cost_fn(xi,xf,t);
+    ret.time[id] = t;
+    ret.cost[id] = c;
+  }
+}
+
+#endif // FIXEDTIMELQR_CUHPP

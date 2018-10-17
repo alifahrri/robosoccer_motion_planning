@@ -1,4 +1,0 @@
-<launch>
-  <node name="rrt_integrator2d_test" pkg="rrt" type="rrt_integrator2d_test"/>
-  <node name="rviz" pkg="rviz" type="rviz"/>
-</launch>

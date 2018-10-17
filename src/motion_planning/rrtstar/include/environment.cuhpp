@@ -1,0 +1,267 @@
+#ifndef ENVIRONMENT_CUHPP
+#define ENVIRONMENT_CUHPP
+
+#include "environment.hpp"
+
+#include <cuda.h>
+#include <cuda_runtime.h>
+
+#define HOST __host__
+#define DEVICE __device__
+#define ATTRIBUTE __host__ __device__
+
+#ifndef gpuErrchk
+#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+   if (code != cudaSuccess)
+   {
+      fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+      if (abort) exit(code);
+   }
+}
+#endif
+
+#define THREAD_PER_BLOCK (128)
+
+#include "util.h"
+// some manual function print to trace execution
+// this NDEBUG is from cmake when on {RELEASE or MINSIZEREL} mode
+#ifndef NDEBUG
+#define TRACE_EXEC
+#endif
+
+// range based for loop wrapper for generic object
+template <typename ObjectType>
+struct RangeWrapper
+{
+  __host__ __device__
+  RangeWrapper(ObjectType *obj, size_t n)
+    : obj(obj), n(n) {}
+
+  __host__ __device__
+  size_t size() const { return n; }
+
+  __host__ __device__
+  ObjectType& operator[](size_t i) {
+    return obj[i];
+  }
+
+  __host__ __device__
+  const ObjectType& operator[](size_t i) const {
+    return obj[i];
+  }
+
+  __host__ __device__
+  ObjectType* begin() {
+    return (obj[0]);
+  }
+
+  __host__ __device__
+  const ObjectType* begin() const {
+    return &(obj[0]);
+  }
+
+  __host__ __device__
+  ObjectType* end() {
+    return &(obj[n]);
+  }
+
+  __host__ __device__
+  const ObjectType* end() const {
+    return &(obj[n]);
+  }
+
+  ObjectType *obj;
+  size_t n;
+};
+
+template <int n_obstacles, int x_idx = 0, int y_idx = 1, int segment = 10, typename Points, typename Obstacles, typename Scalar>
+__global__
+void kernel_line_circle_collision(Points *p0, Points *p1, bool *collide, Obstacles *obs, Scalar radius, size_t n)
+{
+  auto id = blockIdx.x * blockDim.x + threadIdx.x;
+  if(id < n) {
+    RangeWrapper<Obstacles> obs_wrapper(obs, n_obstacles);
+    auto collision = line_circle_collision<x_idx,y_idx>(p0[id], p1[id], obs_wrapper, radius);
+    collide[id] = collision;
+  }
+}
+
+template <int n_obstacles, int x_idx = 0, int y_idx = 1, int segment = 10, typename Points, typename Obstacles, typename Scalar>
+__global__
+void kernel_point_circle_collision(Points *p, bool *collide, Obstacles *obs, Scalar radius, size_t n)
+{
+  auto id = blockIdx.x * blockDim.x + threadIdx.x;
+  if(id < n) {
+    RangeWrapper<Obstacles> obs_wrapper(obs, n_obstacles);
+    auto collision = point_circle_collision<x_idx,y_idx>(p[id], obs_wrapper, radius);
+    collide[id] = collision;
+  }
+}
+
+// for dynamic obs :
+template <int n_obstacles, int x_idx = 0, int y_idx = 1, int segment, int check_segment, typename Points, typename Scalar, typename Obstacles>
+__global__
+void kernel_parametrized_line_circle_collision(Points *p0, Points *p1, Scalar *t0, Scalar *t1, Obstacles *obs, Scalar radius, bool *collide, size_t n)
+{
+  auto id = blockIdx.x * blockDim.x + threadIdx.x;
+  if(id < n) {
+    RangeWrapper<Obstacles> obs_wrapper(obs, n_obstacles);
+    auto collision = parametrized_line_circle_collision<x_idx,y_idx,check_segment>(p0[id],p1[id],t0[id],t1[id],obs_wrapper,radius);
+    collide[id] = collision;
+  }
+}
+
+template <typename scalar = double, int n = 9>
+struct RobosoccerGPU : public Robosoccer<scalar,n>
+{
+  RobosoccerGPU(scalar x0 = scalar(SAMPLE_X0), scalar x1 = scalar(SAMPLE_X1))
+    : Robosoccer<scalar,n>(x0,x1)
+  {}
+  RobosoccerGPU(const std::array<std::tuple<scalar,scalar>,n> &obs,
+             scalar x0 = scalar(SAMPLE_X0),
+             scalar x1 = scalar(SAMPLE_X1))
+    : Robosoccer<scalar,n>(obs,x0,x1)
+  {}
+
+  int thread_per_block = THREAD_PER_BLOCK;
+
+  template <bool device_ptr = true, int x_idx=0, int y_idx=1, typename Points>
+  void batch_collide(Points *pts, bool *collision, size_t n_pts) {
+#ifdef TRACE_EXEC
+    TRACE_FN(__PRETTY_FUNCTION__);
+#endif
+    Points *dev_pts;
+    Obstacle<scalar> *dev_obs;
+    bool *dev_collision;
+    gpuErrchk(cudaMalloc(&dev_obs, n*sizeof(Obstacle<scalar>)));
+    gpuErrchk(cudaMemcpy(dev_obs, this->obs.data(), n*sizeof(Obstacle<scalar>), cudaMemcpyHostToDevice));
+    if(device_ptr) {
+      dev_pts = pts;
+      dev_collision = collision;
+    }
+    else {
+      gpuErrchk(cudaMalloc(&dev_collision, n_pts*sizeof(bool)));
+      gpuErrchk(cudaMalloc(&dev_pts, n_pts*sizeof(Points)));
+      gpuErrchk(cudaMemcpy(dev_pts, pts, n_pts*sizeof(Points), cudaMemcpyHostToDevice));
+    }
+    dim3 blocks;
+    dim3 threads;
+    threads.x = thread_per_block;
+    blocks.x = ceil((double)n_pts/thread_per_block);
+    kernel_point_circle_collision<n,x_idx,y_idx><<<blocks,threads>>>(dev_pts, dev_collision, dev_obs, this->collision_radius, n_pts);
+    gpuErrchk(cudaGetLastError());
+    gpuErrchk(cudaFree(dev_obs));
+    if(!device_ptr) {
+      gpuErrchk(cudaMemcpy(collision, dev_collision, n_pts*sizeof(bool), cudaMemcpyDeviceToHost));
+      gpuErrchk(cudaFree(dev_collision));
+      gpuErrchk(cudaFree(dev_pts));
+    }
+  }
+
+  template <bool device_ptr = true, int x_idx=0, int y_idx=1, typename Points>
+  void batch_collide(Points *pts1, Points *pts2, bool *collision, size_t n_pts) {
+#ifdef TRACE_EXEC
+    TRACE_FN(__PRETTY_FUNCTION__);
+#endif
+    Points *dev_pts1, *dev_pts2;
+    Obstacle<scalar> *dev_obs;
+    bool *dev_collision;
+    gpuErrchk(cudaMalloc(&dev_obs, n*sizeof(Obstacle<scalar>)));
+    gpuErrchk(cudaMemcpy(dev_obs, this->obs.data(), n*sizeof(Obstacle<scalar>), cudaMemcpyHostToDevice));
+    if(device_ptr) {
+      dev_collision = collision;
+      dev_pts1 = pts1;
+      dev_pts2 = pts2;
+    }
+    else {
+      gpuErrchk(cudaMalloc(&dev_collision, n_pts*sizeof(bool)));
+      gpuErrchk(cudaMalloc(&dev_pts1, n_pts*sizeof(Points)));
+      gpuErrchk(cudaMalloc(&dev_pts2, n_pts*sizeof(Points)));
+      gpuErrchk(cudaMemcpy(dev_pts1, pts1, n_pts*sizeof(Points), cudaMemcpyHostToDevice));
+      gpuErrchk(cudaMemcpy(dev_pts2, pts2, n_pts*sizeof(Points), cudaMemcpyHostToDevice));
+    }
+    dim3 blocks;
+    dim3 threads;
+    threads.x = thread_per_block;
+    blocks.x = ceil((double)n_pts/thread_per_block);
+    kernel_line_circle_collision<n,x_idx,y_idx><<<blocks,threads>>>(dev_pts1, dev_pts2, dev_collision, dev_obs, this->collision_radius, n_pts);
+    gpuErrchk(cudaGetLastError());
+    gpuErrchk(cudaFree(dev_obs));
+    if(!device_ptr) {
+      gpuErrchk(cudaMemcpy(collision, dev_collision, n_pts*sizeof(bool), cudaMemcpyDeviceToHost));
+      gpuErrchk(cudaFree(dev_collision));
+      gpuErrchk(cudaFree(dev_pts1));
+      gpuErrchk(cudaFree(dev_pts2));
+    }
+  }
+};
+
+template <typename scalar = double, int n = 9>
+struct DynamicRobosoccerGPU : public DynamicRobosoccer<scalar,n>
+{
+  DynamicRobosoccerGPU(scalar x0 = scalar(SAMPLE_X0),
+                    scalar x1 = scalar(SAMPLE_X1),
+                    scalar x2 = scalar(SAMPLE_X2),
+                    scalar x3 = scalar(SAMPLE_X3))
+    : DynamicRobosoccer<scalar,n>(x0,x1,x2,x3)
+  {}
+  DynamicRobosoccerGPU(const std::array<DynamicObstacle<scalar>,n> &obs,
+                    scalar x0 = scalar(SAMPLE_X0),
+                    scalar x1 = scalar(SAMPLE_X1),
+                    scalar x2 = scalar(SAMPLE_X2),
+                    scalar x3 = scalar(SAMPLE_X3))
+    : DynamicRobosoccer<scalar,n>(obs,x0,x1,x2,x3)
+  {}
+
+  template <bool device_ptr = true, int x_idx=0, int y_idx=1, int segment=10, int check_segment=10, typename Points>
+  void batch_collide(Points *p1, Points *p2, bool *collision, scalar *t0, scalar *t1, size_t n_pts)
+  {
+#ifdef TRACE_EXEC
+    TRACE_FN(__PRETTY_FUNCTION__);
+#endif
+    DynamicObstacle<scalar> *dev_obs;
+    Points *dev_pts1, *dev_pts2;
+    scalar *dev_t0, *dev_t1;
+    bool *dev_collision;
+    gpuErrchk(cudaMalloc(&dev_obs, n*sizeof(DynamicObstacle<scalar>)));
+    gpuErrchk(cudaMemcpy(dev_obs, this->obs.data(), n*sizeof(DynamicObstacle<scalar>), cudaMemcpyHostToDevice));
+    if(device_ptr) {
+      dev_pts1 = p1;
+      dev_pts2 = p2;
+      dev_collision = collision;
+      dev_t0 = t0;
+      dev_t1 = t1;
+    }
+    else {
+      gpuErrchk(cudaMalloc(&dev_pts1, n_pts*sizeof(Points)));
+      gpuErrchk(cudaMalloc(&dev_pts2, n_pts*sizeof(Points)));
+      gpuErrchk(cudaMalloc(&dev_t0, n_pts*sizeof(scalar)));
+      gpuErrchk(cudaMalloc(&dev_t1, n_pts*sizeof(scalar)));
+      gpuErrchk(cudaMalloc(&dev_collision, n_pts*sizeof(bool)));
+      gpuErrchk(cudaMemcpy(dev_pts1, p1, n_pts*sizeof(Points), cudaMemcpyHostToDevice));
+      gpuErrchk(cudaMemcpy(dev_pts2, p2, n_pts*sizeof(Points), cudaMemcpyHostToDevice));
+      gpuErrchk(cudaMemcpy(dev_t0, t0, n_pts*sizeof(scalar), cudaMemcpyHostToDevice));
+      gpuErrchk(cudaMemcpy(dev_t1, t1, n_pts*sizeof(scalar), cudaMemcpyHostToDevice));
+    }
+    dim3 blocks;
+    dim3 threads;
+    threads.x = thread_per_block;
+    blocks.x = ceil((double)n_pts/thread_per_block);
+    kernel_parametrized_line_circle_collision<n,x_idx,y_idx,segment,check_segment><<<blocks,threads>>>(dev_pts1, dev_pts2, dev_t0, dev_t1, dev_obs, this->collision_radius, dev_collision, n_pts);
+    gpuErrchk(cudaGetLastError());
+    gpuErrchk(cudaFree(dev_obs));
+    if(!device_ptr) {
+      gpuErrchk(cudaMemcpy(collision, dev_collision, n_pts*sizeof(bool), cudaMemcpyDeviceToHost));
+      gpuErrchk(cudaFree(dev_collision));
+      gpuErrchk(cudaFree(dev_pts1));
+      gpuErrchk(cudaFree(dev_t0));
+      gpuErrchk(cudaFree(dev_t1));
+    }
+  }
+
+  int thread_per_block = THREAD_PER_BLOCK;
+};
+
+#endif // ENVIRONMENT_CUHPP

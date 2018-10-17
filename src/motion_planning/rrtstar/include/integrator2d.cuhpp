@@ -1,0 +1,137 @@
+#ifndef INTEGRATOR2D_CUHPP
+#define INTEGRATOR2D_CUHPP
+
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include <iostream>
+#include "integrator2d.hpp"
+#include "fixedtimelqr.cuhpp"
+
+#ifndef gpuErrchk
+#define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
+{
+   if (code != cudaSuccess)
+   {
+      fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+      if (abort) exit(code);
+   }
+}
+#endif
+
+#define THREAD_PER_BLOCK (128)
+
+template <int segment = 10, typename State, typename Trajectory, typename cost_t, typename InputMat, typename InputWeight>
+__global__
+void kernel_solver(State *s0, State *s1, Trajectory trajectory, InputMat *B, InputWeight *R, cost_t cost, size_t n) {
+  auto id = blockIdx.x * blockDim.x + threadIdx.x;
+  if(id < n) {
+    // printf("[%d] state : %f,%f,%f,%f -> %f,%f,%f,%f\n",id,(s0[id])[0],(s0[id])[1],(s0[id])[2],(s0[id])[3],(s1[id])[0],(s1[id])[1],(s1[id])[2],(s1[id])[3]);
+    Models::Integrator2DGramian g;
+    Models::Integrator2DOptTimeDiff otd;
+    Models::Integrator2DOptTimeSolver ots(otd);
+    Models::Integrator2DClosedExpm ss_expm;
+    Models::Integrator2DCmpClosedExpm cmp_expm;
+    // Models::Integrator2DCost cost_fn;
+    auto xi = s0[id];
+    auto xf = s1[id];
+    auto r_mat = *R;
+    auto b_mat = *B;
+    solve_trajectory<Models::Integrator2DSSComposite::StateType,segment>(xi, xf, ots, g, ss_expm, cmp_expm, r_mat, b_mat, trajectory, id);
+    // compute_cost(s0[id], s1[id], cost, ots, cost_fn, id);
+    // printf("[%d] cost : %f, time : %f\n", id, cost.cost[id], cost.time[id]);
+  }
+}
+
+template <typename State, typename cost_t>
+__global__
+void kernel_cost(State *s0, State *s1, cost_t cost, size_t n) {
+  auto id = blockIdx.x * blockDim.x + threadIdx.x;
+  if(id < n) {
+    // printf("[%d] state : %f,%f,%f,%f -> %f,%f,%f,%f\n",id,(s0[id])[0],(s0[id])[1],(s0[id])[2],(s0[id])[3],(s1[id])[0],(s1[id])[1],(s1[id])[2],(s1[id])[3]);
+    // Models::Integrator2DGramian g;
+    Models::Integrator2DOptTimeDiff otd;
+    Models::Integrator2DOptTimeSolver ots(otd);
+    // Models::Integrator2DClosedExpm ss_expm;
+    // Models::Integrator2DCmpClosedExpm cmp_expm;
+    Models::Integrator2DCost cost_fn;
+    auto xi = s0[id];
+    auto xf = s1[id];
+    // solve_trajectory<Models::Integrator2DSSComposite::StateType,segment>(s0[id], s1[id], ots, g, ss_expm, cmp_expm, *R, *B, trajectory, id);
+    compute_cost(xi, xf, cost, ots, cost_fn, id);
+    // printf("[%d] cost : %f, time : %f\n", id, cost.cost[id], cost.time[id]);
+  }
+}
+
+namespace ModelsGPU {
+
+typedef Models::Integrator2D::State State;
+typedef Models::Integrator2D::Input Input;
+typedef double Scalar;
+
+struct SolverGPU {
+  SolverGPU()
+  {
+    R = Models::Integrator2DSS::InputWeightType::Identity();
+    B << 0, 0, 0, 0, 1, 0, 0, 1;
+    gpuErrchk(cudaMalloc(&dev_B,sizeof(Models::Integrator2DSS::InputMatrix)));
+    gpuErrchk(cudaMalloc(&dev_R,sizeof(Models::Integrator2DSS::InputWeightType)));
+    gpuErrchk(cudaMemcpy(dev_B,&B,sizeof(Models::Integrator2DSS::InputMatrix),cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMemcpy(dev_R,&R,sizeof(Models::Integrator2DSS::InputWeightType),cudaMemcpyHostToDevice));
+  }
+  template<int segment = 10, typename iStateArray, typename fStateArray, typename TrajectoryMapper, typename CostMapper>
+  void solve(const iStateArray &xi, const fStateArray &xf, TrajectoryMapper &t_map, CostMapper &c_map)
+  {
+    auto n = xi.size();
+    CostGPU<Scalar> cost, dev_cost;
+    TrajectoryGPU<Scalar,State,Input> trajectory, dev_trajectory;
+    State *dev_xi, *dev_xf;
+
+    gpuErrchk(cudaMalloc(&dev_xi, n*sizeof(State)));
+    gpuErrchk(cudaMalloc(&dev_xf, n*sizeof(State)));
+
+    gpuErrchk(cudaMemcpy(dev_xi, xi.data(), n*sizeof(State),cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMemcpy(dev_xf, xf.data(), n*sizeof(State),cudaMemcpyHostToDevice));
+
+    allocate_cost<Scalar>(&cost, &dev_cost, n);
+    allocate_trajectory<Scalar,State,Input>(&trajectory, &dev_trajectory, n, segment+1);
+
+    dim3 blocks;
+    dim3 threads;
+    threads.x = THREAD_PER_BLOCK;
+    blocks.x = ceil(float(n) / THREAD_PER_BLOCK);
+    kernel_solver<segment><<<blocks,threads>>>(dev_xi, dev_xf, dev_trajectory, dev_B, dev_R, dev_cost, n);
+    gpuErrchk(cudaGetLastError());
+    kernel_cost<<<blocks,threads>>>(dev_xi, dev_xf, dev_cost, n);
+    gpuErrchk(cudaGetLastError());
+    copy_cost(&cost, &dev_cost, cudaMemcpyDeviceToHost);
+    copy_trajectory(&trajectory, &dev_trajectory, cudaMemcpyDeviceToHost);
+
+    auto t_ptr = trajectory.time;
+    auto s_ptr = trajectory.states;
+    auto i_ptr = trajectory.inputs;
+    for(size_t i=0; i<n; i++) {
+      auto t_begin = t_ptr;
+      auto t_end = t_ptr + (segment+1);
+      auto s_begin = s_ptr;
+      auto s_end = s_ptr + (segment+1);
+      auto i_begin = i_ptr;
+      auto i_end = i_ptr + (segment+1);
+      t_map(t_begin, t_end, s_begin, s_end, i_begin, i_end);
+      c_map(cost.cost[i], cost.time[i]);
+      t_ptr += (segment+1); s_ptr += (segment+1); i_ptr += (segment+1);
+    }
+
+    gpuErrchk(cudaFree(dev_xi));
+    gpuErrchk(cudaFree(dev_xf));
+    free_cost(&cost, &dev_cost);
+    free_trajectory(&trajectory, &dev_trajectory);
+  }
+  Models::Integrator2DSS::InputWeightType R;
+  Models::Integrator2DSS::InputMatrix B;
+  Models::Integrator2DSS::InputMatrix *dev_B;
+  Models::Integrator2DSS::InputWeightType *dev_R;
+};
+}
+
+#endif // INTEGRATOR2D_CUHPP

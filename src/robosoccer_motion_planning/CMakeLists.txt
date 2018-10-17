@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(robosoccer_motion_planning)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
-add_compile_options(-std=c++11)
+add_compile_options(-std=c++17)
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
@@ -15,8 +15,8 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
-find_package(catkin REQUIRED nubot_common roscpp)
-find_package(rrt REQUIRED)
+find_package(catkin REQUIRED COMPONENTS nubot_common roscpp)
+find_package(rrtstar REQUIRED)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -108,10 +108,10 @@ find_package(rrt REQUIRED)
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-  #  INCLUDE_DIRS include
+  INCLUDE_DIRS include
   #  LIBRARIES robosoccer_motion_planning
   #  CATKIN_DEPENDS other_catkin_pkg
-  #  DEPENDS system_lib
+  DEPENDS rrtstar
   )
 
 ###########
@@ -123,7 +123,7 @@ catkin_package(
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
-  ${rrt_INCLUDE_DIRS}
+  ${rrtstar_INCLUDE_DIRS}
   )
 
 ## Declare a C++ library
