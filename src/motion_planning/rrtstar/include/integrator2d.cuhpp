@@ -7,6 +7,15 @@
 #include "integrator2d.hpp"
 #include "fixedtimelqr.cuhpp"
 
+#include "util.h"
+// some manual function print to trace execution
+// this NDEBUG is from cmake when on {RELEASE or MINSIZEREL} mode
+#ifndef NDEBUG
+#define TRACE_EXEC
+#define TRACE_VAL
+#define TRACE_CUDA
+#endif
+
 #ifndef gpuErrchk
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
@@ -25,8 +34,10 @@ template <int segment = 10, typename State, typename Trajectory, typename cost_t
 __global__
 void kernel_solver(State *s0, State *s1, Trajectory trajectory, InputMat *B, InputWeight *R, cost_t cost, size_t n) {
   auto id = blockIdx.x * blockDim.x + threadIdx.x;
+#ifdef TRACE_CUDA
+  TRACE_KERNEL(id,0,"kernel_solver");
+#endif
   if(id < n) {
-    // printf("[%d] state : %f,%f,%f,%f -> %f,%f,%f,%f\n",id,(s0[id])[0],(s0[id])[1],(s0[id])[2],(s0[id])[3],(s1[id])[0],(s1[id])[1],(s1[id])[2],(s1[id])[3]);
     Models::Integrator2DGramian g;
     Models::Integrator2DOptTimeDiff otd;
     Models::Integrator2DOptTimeSolver ots(otd);
@@ -37,18 +48,28 @@ void kernel_solver(State *s0, State *s1, Trajectory trajectory, InputMat *B, Inp
     auto xf = s1[id];
     auto r_mat = *R;
     auto b_mat = *B;
+#ifdef TRACE_CUDA
+  TRACE_KERNEL(id,0,"solve_trajectory");
+#endif
     solve_trajectory<Models::Integrator2DSSComposite::StateType,segment>(xi, xf, ots, g, ss_expm, cmp_expm, r_mat, b_mat, trajectory, id);
+#ifdef TRACE_CUDA
+  TRACE_KERNEL(id,0,"solve_trajectory: OK");
+#endif
     // compute_cost(s0[id], s1[id], cost, ots, cost_fn, id);
-    // printf("[%d] cost : %f, time : %f\n", id, cost.cost[id], cost.time[id]);
   }
+#ifdef TRACE_CUDA
+  TRACE_KERNEL(id,0,"kernel_solver: OK");
+#endif
 }
 
 template <typename State, typename cost_t>
 __global__
 void kernel_cost(State *s0, State *s1, cost_t cost, size_t n) {
   auto id = blockIdx.x * blockDim.x + threadIdx.x;
+#ifdef TRACE_CUDA
+  TRACE_KERNEL(id,0,"kernel_cost");
+#endif
   if(id < n) {
-    // printf("[%d] state : %f,%f,%f,%f -> %f,%f,%f,%f\n",id,(s0[id])[0],(s0[id])[1],(s0[id])[2],(s0[id])[3],(s1[id])[0],(s1[id])[1],(s1[id])[2],(s1[id])[3]);
     // Models::Integrator2DGramian g;
     Models::Integrator2DOptTimeDiff otd;
     Models::Integrator2DOptTimeSolver ots(otd);
@@ -57,10 +78,11 @@ void kernel_cost(State *s0, State *s1, cost_t cost, size_t n) {
     Models::Integrator2DCost cost_fn;
     auto xi = s0[id];
     auto xf = s1[id];
-    // solve_trajectory<Models::Integrator2DSSComposite::StateType,segment>(s0[id], s1[id], ots, g, ss_expm, cmp_expm, *R, *B, trajectory, id);
-    compute_cost(xi, xf, cost, ots, cost_fn, id);
-    // printf("[%d] cost : %f, time : %f\n", id, cost.cost[id], cost.time[id]);
+    compute_cost(xi, xf, cost.time, cost.cost, ots, cost_fn, id);
   }
+#ifdef TRACE_CUDA
+  TRACE_KERNEL(id,0,"kernel_cost : OK");
+#endif
 }
 
 namespace ModelsGPU {
@@ -101,8 +123,10 @@ struct SolverGPU {
     threads.x = THREAD_PER_BLOCK;
     blocks.x = ceil(float(n) / THREAD_PER_BLOCK);
     kernel_solver<segment><<<blocks,threads>>>(dev_xi, dev_xf, dev_trajectory, dev_B, dev_R, dev_cost, n);
+    gpuErrchk(cudaThreadSynchronize());
     gpuErrchk(cudaGetLastError());
     kernel_cost<<<blocks,threads>>>(dev_xi, dev_xf, dev_cost, n);
+    gpuErrchk(cudaThreadSynchronize());
     gpuErrchk(cudaGetLastError());
     copy_cost(&cost, &dev_cost, cudaMemcpyDeviceToHost);
     copy_trajectory(&trajectory, &dev_trajectory, cudaMemcpyDeviceToHost);

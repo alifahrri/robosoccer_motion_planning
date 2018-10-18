@@ -37,7 +37,11 @@ public:
       f0 = f1; x0 = x1; x1 = xr;
       f1 = f(x1);
       xr = x1 - (f1 * (x0 - x1)/(f0 - f1));
-      ea = std::abs(f1);
+#ifdef GPU
+      ea = fabs(f1);
+#else
+      ea = std::fabs(f1);
+#endif
       if(ea < e)
         break;
     }

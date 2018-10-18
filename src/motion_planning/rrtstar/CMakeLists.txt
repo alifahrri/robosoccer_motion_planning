@@ -41,16 +41,22 @@ PKG_CHECK_MODULES(nanoflann REQUIRED nanoflann)
 
 find_package(CUDA REQUIRED VERSION 10)
 if(CUDA_FOUND)
-  set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -std=c++11; -lineinfo; -O0; --expt-relaxed-constexpr" )
-  set(CUDA_NVCC_FLAGS
-    ${CUDA_NVCC_FLAGS};
-    -gencode arch=compute_30,code=sm_30
-    -gencode arch=compute_35,code=sm_35;
-    -gencode arch=compute_50,code=[sm_50,compute_50]
-    -gencode arch=compute_52,code=[sm_52,compute_52]
-    -gencode arch=compute_61,code=sm_61
-    -gencode arch=compute_62,code=sm_62
-    )
+  IF(CMAKE_BUILD_TYPE MATCHES Debug)
+    set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -std=c++11; -lineinfo; -O0; -G; -g; --expt-relaxed-constexpr" )
+  ELSEIF(CMAKE_BUILD_TYPE MATCHES Release)
+    set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -std=c++11; -O3; --expt-relaxed-constexpr" )
+  ELSE()
+    set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -std=c++11; -lineinfo; -O1; --expt-relaxed-constexpr" )
+  ENDIF()
+#  set(CUDA_NVCC_FLAGS
+#    ${CUDA_NVCC_FLAGS};
+#    -gencode arch=compute_30,code=sm_30
+#    -gencode arch=compute_35,code=sm_35;
+#    -gencode arch=compute_50,code=[sm_50,compute_50]
+#    -gencode arch=compute_52,code=[sm_52,compute_52]
+#    -gencode arch=compute_61,code=sm_61
+#    -gencode arch=compute_62,code=sm_62
+#    )
   message("CUDA_NVCC_FLAGS" ${CUDA_NVCC_FLAGS})
   add_definitions(-DGPU)
 endif()

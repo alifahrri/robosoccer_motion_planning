@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <tuple>
+#include <math.h>
 #include "rootfinder.hpp"
 
 #ifdef GPU
@@ -50,8 +51,8 @@ public:
     auto off_t1 = 5e-1;
     auto off_t0 = 5e-1;
     while((optimal_time < 0)
-          || std::isnan(optimal_time)
-          || std::isinf(optimal_time)
+          || isnan(optimal_time)
+          || isinf(optimal_time)
           // || f(optimal_time > e)
           )
     {

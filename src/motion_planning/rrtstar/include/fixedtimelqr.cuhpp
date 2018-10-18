@@ -3,6 +3,15 @@
 
 #include "fixedtimelqr.hpp"
 
+// some manual function print to trace execution
+// this NDEBUG is from cmake when on {RELEASE or MINSIZEREL} mode
+#ifndef NDEBUG
+#include "util.h"
+#define TRACE_EXEC
+#define TRACE_VAL
+#define TRACE_CUDA
+#endif
+
 #include <cuda.h>
 #include <cuda_runtime.h>
 #ifndef gpuErrchk
@@ -106,7 +115,14 @@ template <typename CompositeState, int segment = 10, typename State, typename Op
 ATTRIBUTE
 inline void solve_trajectory(const State& xi, const State& xf, const OptTimeSolver &opt_time_solver, const Gramian &G, const SystemExpm &system_expm, const CompositeSystemExpm &cmp_sys_expm, const InputWeight &R, const InputMatrix &B, Trajectory &ret, size_t id = 0)
 {
-  auto opt_time = opt_time_solver(xi,xf);
+#ifdef TRACE_CUDA
+  TRACE_KERNEL(id,0,__PRETTY_FUNCTION__);
+  TRACE_KERNEL(id,0,"opt_time_solver(xi,xf,1e-2,1e-6,1e-2):");
+#endif
+  auto opt_time = opt_time_solver(xi,xf,1e-2,1e-6,1e-2);
+#ifdef TRACE_CUDA
+  TRACE_KERNEL(id,0,"OK");
+#endif
   auto dt = opt_time/segment;
   auto d_opt = G(opt_time).inverse()*(xf-system_expm(opt_time)*xi);
   CompositeState cmp_state;
@@ -125,18 +141,43 @@ inline void solve_trajectory(const State& xi, const State& xf, const OptTimeSolv
     ret.states[id*(segment+1)+i] = state;
     ret.inputs[id*(segment+1)+i] = ctrl;
   }
+#ifdef TRACE_CUDA
+  TRACE_KERNEL(id,0,__FUNCTION__,"OK");
+#endif
 }
 
 template<typename scalar=double, typename State, typename OptTimeSolver, typename CostFN>
 ATTRIBUTE
-inline void compute_cost(const State& xi, const State& xf, CostGPU<scalar> &ret, const OptTimeSolver &opt_time_solver, const CostFN &cost_fn, size_t id)
+inline void compute_cost(const State& xi, const State& xf, scalar *time, scalar *cost, const OptTimeSolver &opt_time_solver, const CostFN &cost_fn, size_t id)
 {
+#ifdef TRACE_CUDA
+  TRACE_KERNEL(id,0,__PRETTY_FUNCTION__);
+#endif
+  // typedef decltype(opt_time_solver(xi,xf,1e-2,1e-6,1e-2)) Time;
+  // typedef decltype(cost_fn(xi,xf,t)) Cost;
+  scalar t;
+  scalar c;
   if(xi != xf) {
-    auto t = opt_time_solver(xi,xf);
-    auto c = cost_fn(xi,xf,t);
-    ret.time[id] = t;
-    ret.cost[id] = c;
+#ifdef TRACE_CUDA
+  TRACE_KERNEL(id,0,"compute time");
+#endif
+    t = opt_time_solver(xi,xf,1e-2,1e-6,1e-2);
+#ifdef TRACE_CUDA
+  TRACE_KERNEL(id,0,"compute time","OK");
+#endif
+#ifdef TRACE_CUDA
+  TRACE_KERNEL(id,0,"compute cost");
+#endif
+    c = cost_fn(xi,xf,t);
+#ifdef TRACE_CUDA
+  TRACE_KERNEL(id,0,"compute cost","OK");
+#endif
   }
+  time[id] = t;
+  cost[id] = c;
+#ifdef TRACE_CUDA
+  TRACE_KERNEL(id,0,__FUNCTION__,"OK");
+#endif
 }
 
 #endif // FIXEDTIMELQR_CUHPP

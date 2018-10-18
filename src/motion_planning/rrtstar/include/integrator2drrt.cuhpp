@@ -52,6 +52,9 @@ struct BatchCollisionTimeSpaceChecker
     for(auto& o : env.obs) {
       (*rg)(o);
     }
+#ifdef TRACE_EXEC
+    DEBUG_PRINT(__FUNCTION__,"OK");
+#endif
   }
 
   template <int x_idx = 0, int y_idx = 1, typename iStateArray, typename fStateArray, typename DynamicArray>
@@ -125,6 +128,9 @@ struct BatchCollisionTimeSpaceChecker
     gpuErrchk(cudaFree(dev_t1));
     gpuErrchk(cudaFree(dev_collision));
     delete[] host_collision;
+#ifdef TRACE_EXEC
+    DEBUG_PRINT(__FUNCTION__,"OK");
+#endif
   }
 
   template <typename StateArray, typename DynamicArray>
@@ -140,6 +146,9 @@ struct BatchCollisionTimeSpaceChecker
     std::vector<state_t> s0_vec;
     for(size_t i=0; i<n; i++) s0_vec.push_back(s0);
     check(s0_vec, states, edges, collision, costs);
+#ifdef TRACE_EXEC
+    DEBUG_PRINT(__FUNCTION__,"OK");
+#endif
   }
 
   template <typename StateArray, typename DynamicArray>
@@ -155,6 +164,9 @@ struct BatchCollisionTimeSpaceChecker
     std::vector<state_t> s1_vec;
     for(size_t i=0; i<n; i++) s1_vec.push_back(s1);
     check(states, s1_vec, edges, collision, costs);
+#ifdef TRACE_EXEC
+    DEBUG_PRINT(__FUNCTION__,"OK");
+#endif
   }
 
   template <typename Edge>
@@ -173,6 +185,9 @@ struct BatchCollisionTimeSpaceChecker
       collision = env.collide<0,1>(s0,s1,t0,t1);
       if(collision) break;
     }
+#ifdef TRACE_EXEC
+    DEBUG_PRINT(__FUNCTION__,"OK");
+#endif
     return collision;
   }
 
@@ -203,6 +218,9 @@ struct BatchCollisionChecker
       o.y = (*rg)(1);
     }
     collisions.clear();
+#ifdef TRACE_EXEC
+    DEBUG_PRINT(__FUNCTION__,"OK");
+#endif
   }
 
   template<int x_idx=0, int y_idx=1, typename iStateArray, typename fStateArray, typename DynamicArray>
@@ -260,6 +278,9 @@ struct BatchCollisionChecker
     gpuErrchk(cudaFree(dev_test_pt1));
     gpuErrchk(cudaFree(dev_collision));
     delete[] host_collision;
+#ifdef TRACE_EXEC
+    DEBUG_PRINT(__FUNCTION__,"OK");
+#endif
   }
 
   template <typename StateArray, typename DynamicArray>
@@ -275,6 +296,9 @@ struct BatchCollisionChecker
     std::vector<state_t> s0_vec;
     for(size_t i=0; i<n; i++) s0_vec.push_back(s0);
     check(s0_vec, states, edges, collision, costs);
+#ifdef TRACE_EXEC
+    DEBUG_PRINT(__FUNCTION__,"OK");
+#endif
   }
 
   template <typename StateArray, typename DynamicArray>
@@ -290,6 +314,9 @@ struct BatchCollisionChecker
     std::vector<state_t> s1_vec;
     for(size_t i=0; i<n; i++) s1_vec.push_back(s1);
     check(states, s1_vec, edges, collision, costs);
+#ifdef TRACE_EXEC
+    DEBUG_PRINT(__FUNCTION__,"OK");
+#endif
   }
 
   template <typename Edge>
@@ -298,6 +325,9 @@ struct BatchCollisionChecker
     TRACE_FN(__PRETTY_FUNCTION__);
 #endif
 #ifdef NO_OBS
+#ifdef TRACE_EXEC
+    DEBUG_PRINT(__FUNCTION__,"OK");
+#endif
     return false;
 #else
     auto path = e.path();
@@ -316,6 +346,9 @@ struct BatchCollisionChecker
     if(collision)
       collisions.push_back(std::make_tuple(path.front(),path.back()));
       */
+#ifdef TRACE_EXEC
+    DEBUG_PRINT(__FUNCTION__,"OK");
+#endif
     return collision;
 #endif
   }

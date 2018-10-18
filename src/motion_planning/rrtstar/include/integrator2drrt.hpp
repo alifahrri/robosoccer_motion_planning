@@ -126,7 +126,8 @@ struct TreeInt2D
   typedef int Index;
   typedef std::vector<Index> IndexList;
   typedef state_t State;
-  typedef std::vector<std::reference_wrapper<State>> StateRefList;
+  // typedef std::vector<std::reference_wrapper<State>> StateList;
+  typedef std::vector<State> StateList;
 
   TreeInt2D() {}
 
@@ -139,9 +140,9 @@ struct TreeInt2D
     return ret;
   }
 
-  StateRefList states(const IndexList &indexes)
+  StateList states(const IndexList &indexes)
   {
-    StateRefList ret;
+    StateList ret;
     for(const auto &i : indexes)
       ret.push_back(tree(i));
     return ret;
