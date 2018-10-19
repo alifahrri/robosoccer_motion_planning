@@ -6,6 +6,8 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 
+#include "device_util.cuh"
+
 #define HOST __host__
 #define DEVICE __device__
 #define ATTRIBUTE __host__ __device__
@@ -14,67 +16,23 @@
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
 {
-   if (code != cudaSuccess)
-   {
-      fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
-      if (abort) exit(code);
-   }
+  if (code != cudaSuccess)
+  {
+    fprintf(stderr,"GPUassert: %s %s %d\n", cudaGetErrorString(code), file, line);
+    if (abort) exit(code);
+  }
 }
 #endif
 
 #define THREAD_PER_BLOCK (128)
 
-#include "util.h"
 // some manual function print to trace execution
 // this NDEBUG is from cmake when on {RELEASE or MINSIZEREL} mode
 #ifndef NDEBUG
+#include "util.h"
 #define TRACE_EXEC
+#define TRACE_CUDA
 #endif
-
-// range based for loop wrapper for generic object
-template <typename ObjectType>
-struct RangeWrapper
-{
-  __host__ __device__
-  RangeWrapper(ObjectType *obj, size_t n)
-    : obj(obj), n(n) {}
-
-  __host__ __device__
-  size_t size() const { return n; }
-
-  __host__ __device__
-  ObjectType& operator[](size_t i) {
-    return obj[i];
-  }
-
-  __host__ __device__
-  const ObjectType& operator[](size_t i) const {
-    return obj[i];
-  }
-
-  __host__ __device__
-  ObjectType* begin() {
-    return (obj[0]);
-  }
-
-  __host__ __device__
-  const ObjectType* begin() const {
-    return &(obj[0]);
-  }
-
-  __host__ __device__
-  ObjectType* end() {
-    return &(obj[n]);
-  }
-
-  __host__ __device__
-  const ObjectType* end() const {
-    return &(obj[n]);
-  }
-
-  ObjectType *obj;
-  size_t n;
-};
 
 template <int n_obstacles, int x_idx = 0, int y_idx = 1, int segment = 10, typename Points, typename Obstacles, typename Scalar>
 __global__
@@ -106,11 +64,27 @@ __global__
 void kernel_parametrized_line_circle_collision(Points *p0, Points *p1, Scalar *t0, Scalar *t1, Obstacles *obs, Scalar radius, bool *collide, size_t n)
 {
   auto id = blockIdx.x * blockDim.x + threadIdx.x;
+#ifdef TRACE_CUDA
+  TRACE_KERNEL(id,0,"kernel_collision");
+#endif
   if(id < n) {
     RangeWrapper<Obstacles> obs_wrapper(obs, n_obstacles);
-    auto collision = parametrized_line_circle_collision<x_idx,y_idx,check_segment>(p0[id],p1[id],t0[id],t1[id],obs_wrapper,radius);
+    auto pi = p0[id];
+    auto pf = p1[id];
+    auto ti = t0[id];
+    auto tf = t1[id];
+#ifdef TRACE_CUDA
+    TRACE_KERNEL(id,0,"collision_fn:");
+#endif
+    auto collision = parametrized_line_circle_collision<x_idx,y_idx,check_segment>(pi,pf,ti,tf,obs_wrapper,radius);
+#ifdef TRACE_CUDA
+    TRACE_KERNEL(id,0,"collision_fn: OK");
+#endif
     collide[id] = collision;
   }
+#ifdef TRACE_CUDA
+  TRACE_KERNEL(id,0,"kernel_collision: OK");
+#endif
 }
 
 template <typename scalar = double, int n = 9>
@@ -120,8 +94,8 @@ struct RobosoccerGPU : public Robosoccer<scalar,n>
     : Robosoccer<scalar,n>(x0,x1)
   {}
   RobosoccerGPU(const std::array<std::tuple<scalar,scalar>,n> &obs,
-             scalar x0 = scalar(SAMPLE_X0),
-             scalar x1 = scalar(SAMPLE_X1))
+                scalar x0 = scalar(SAMPLE_X0),
+                scalar x1 = scalar(SAMPLE_X1))
     : Robosoccer<scalar,n>(obs,x0,x1)
   {}
 
@@ -151,6 +125,7 @@ struct RobosoccerGPU : public Robosoccer<scalar,n>
     threads.x = thread_per_block;
     blocks.x = ceil((double)n_pts/thread_per_block);
     kernel_point_circle_collision<n,x_idx,y_idx><<<blocks,threads>>>(dev_pts, dev_collision, dev_obs, this->collision_radius, n_pts);
+    gpuErrchk(cudaThreadSynchronize());
     gpuErrchk(cudaGetLastError());
     gpuErrchk(cudaFree(dev_obs));
     if(!device_ptr) {
@@ -158,6 +133,9 @@ struct RobosoccerGPU : public Robosoccer<scalar,n>
       gpuErrchk(cudaFree(dev_collision));
       gpuErrchk(cudaFree(dev_pts));
     }
+#ifdef TRACE_EXEC
+    DEBUG_PRINT(__FUNCTION__, "OK");
+#endif
   }
 
   template <bool device_ptr = true, int x_idx=0, int y_idx=1, typename Points>
@@ -187,6 +165,7 @@ struct RobosoccerGPU : public Robosoccer<scalar,n>
     threads.x = thread_per_block;
     blocks.x = ceil((double)n_pts/thread_per_block);
     kernel_line_circle_collision<n,x_idx,y_idx><<<blocks,threads>>>(dev_pts1, dev_pts2, dev_collision, dev_obs, this->collision_radius, n_pts);
+    gpuErrchk(cudaThreadSynchronize());
     gpuErrchk(cudaGetLastError());
     gpuErrchk(cudaFree(dev_obs));
     if(!device_ptr) {
@@ -202,16 +181,16 @@ template <typename scalar = double, int n = 9>
 struct DynamicRobosoccerGPU : public DynamicRobosoccer<scalar,n>
 {
   DynamicRobosoccerGPU(scalar x0 = scalar(SAMPLE_X0),
-                    scalar x1 = scalar(SAMPLE_X1),
-                    scalar x2 = scalar(SAMPLE_X2),
-                    scalar x3 = scalar(SAMPLE_X3))
+                       scalar x1 = scalar(SAMPLE_X1),
+                       scalar x2 = scalar(SAMPLE_X2),
+                       scalar x3 = scalar(SAMPLE_X3))
     : DynamicRobosoccer<scalar,n>(x0,x1,x2,x3)
   {}
   DynamicRobosoccerGPU(const std::array<DynamicObstacle<scalar>,n> &obs,
-                    scalar x0 = scalar(SAMPLE_X0),
-                    scalar x1 = scalar(SAMPLE_X1),
-                    scalar x2 = scalar(SAMPLE_X2),
-                    scalar x3 = scalar(SAMPLE_X3))
+                       scalar x0 = scalar(SAMPLE_X0),
+                       scalar x1 = scalar(SAMPLE_X1),
+                       scalar x2 = scalar(SAMPLE_X2),
+                       scalar x3 = scalar(SAMPLE_X3))
     : DynamicRobosoccer<scalar,n>(obs,x0,x1,x2,x3)
   {}
 
@@ -250,6 +229,7 @@ struct DynamicRobosoccerGPU : public DynamicRobosoccer<scalar,n>
     threads.x = thread_per_block;
     blocks.x = ceil((double)n_pts/thread_per_block);
     kernel_parametrized_line_circle_collision<n,x_idx,y_idx,segment,check_segment><<<blocks,threads>>>(dev_pts1, dev_pts2, dev_t0, dev_t1, dev_obs, this->collision_radius, dev_collision, n_pts);
+    gpuErrchk(cudaThreadSynchronize());
     gpuErrchk(cudaGetLastError());
     gpuErrchk(cudaFree(dev_obs));
     if(!device_ptr) {
@@ -259,6 +239,9 @@ struct DynamicRobosoccerGPU : public DynamicRobosoccer<scalar,n>
       gpuErrchk(cudaFree(dev_t0));
       gpuErrchk(cudaFree(dev_t1));
     }
+#ifdef TRACE_EXEC
+    DEBUG_PRINT(__FUNCTION__,"OK");
+#endif
   }
 
   int thread_per_block = THREAD_PER_BLOCK;

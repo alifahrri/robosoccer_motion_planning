@@ -7,6 +7,7 @@
 
 #include <cuda.h>
 #include <cuda_runtime.h>
+#include <type_traits>
 
 #ifndef gpuErrchk
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
@@ -64,7 +65,14 @@ struct BatchCollisionTimeSpaceChecker
 #ifdef TRACE_EXEC
     TRACE_FN(__PRETTY_FUNCTION__);
 #endif
-    std::vector<state_t > test_pt0, test_pt1;
+    // make aliases for state type, deducing from state array
+    // and remove reference
+    // typedef std::decay_t<decltype(s0.at(0))> iStateType; // error
+    // typedef std::decay_t<decltype(s1.at(0))> fStateType; // error
+    using iStateType = std::decay_t<decltype(s0.at(0))>;
+    using fStateType = std::decay_t<decltype(s1.at(0))>;
+    std::vector<iStateType> test_pt0;
+    std::vector<fStateType> test_pt1;
     std::vector<scalar> test_t0, test_t1;
     // ModelsGPU::SolverGPU solver;
     auto trajectory_inserter = [&](ModelsGPU::Scalar *t_begin, ModelsGPU::Scalar *t_end,
@@ -93,18 +101,20 @@ struct BatchCollisionTimeSpaceChecker
       costs.push_back(cost);
     };
     solver.solve<segment>(s0, s1, trajectory_inserter, cost_inserter);
-    state_t  *dev_test_pt0;
-    state_t  *dev_test_pt1;
+    // state_t  *dev_test_pt0;
+    // state_t  *dev_test_pt1;
+    iStateType  *dev_test_pt0;
+    fStateType  *dev_test_pt1;
     scalar *dev_t0;
     scalar *dev_t1;
     bool *dev_collision;
     auto test_n = test_pt0.size();
-    gpuErrchk(cudaMalloc(&dev_test_pt0, test_n*sizeof(state_t )));
-    gpuErrchk(cudaMalloc(&dev_test_pt1, test_n*sizeof(state_t )));
+    gpuErrchk(cudaMalloc(&dev_test_pt0, test_n*sizeof(iStateType)));
+    gpuErrchk(cudaMalloc(&dev_test_pt1, test_n*sizeof(fStateType)));
     gpuErrchk(cudaMalloc(&dev_t0, test_n*sizeof(scalar)));
     gpuErrchk(cudaMalloc(&dev_t1, test_n*sizeof(scalar)));
-    gpuErrchk(cudaMemcpy(dev_test_pt0, test_pt0.data(), test_n*sizeof(state_t ), cudaMemcpyHostToDevice));
-    gpuErrchk(cudaMemcpy(dev_test_pt1, test_pt1.data(), test_n*sizeof(state_t ), cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMemcpy(dev_test_pt0, test_pt0.data(), test_n*sizeof(iStateType), cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMemcpy(dev_test_pt1, test_pt1.data(), test_n*sizeof(fStateType), cudaMemcpyHostToDevice));
     gpuErrchk(cudaMemcpy(dev_t0, test_t0.data(), test_n*sizeof(scalar), cudaMemcpyHostToDevice));
     gpuErrchk(cudaMemcpy(dev_t1, test_t1.data(), test_n*sizeof(scalar), cudaMemcpyHostToDevice));
     gpuErrchk(cudaMalloc(&dev_collision, test_n*sizeof(bool)));

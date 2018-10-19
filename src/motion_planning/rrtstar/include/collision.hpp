@@ -3,10 +3,12 @@
 
 #include <vector>
 #include <math.h>
+#include <type_traits>
 
 #ifdef GPU
 #include <cuda.h>
 #include <cuda_runtime.h>
+#include "device_util.cuh"
 
 #define HOST __host__
 #define DEVICE __device__
@@ -15,6 +17,13 @@
 #define HOST
 #define DEVICE
 #define ATTRIBUTE
+#endif
+
+#ifndef NDEBUG
+#ifdef __NVCC__
+#include "util.h"
+#define TRACE_CUDA
+#endif
 #endif
 
 template <int x_idx, int y_idx, typename point_t, typename Iterable, typename scalar>
@@ -42,6 +51,9 @@ template <int x_idx, int y_idx, typename p1_t, typename p2_t, typename Iterable,
 ATTRIBUTE
 inline
 bool line_circle_collision(const p1_t &pt0, const p2_t &pt1, const Iterable &obs, const scalar &collision_radius) {
+#ifdef TRACE_CUDA
+  TRACE_KERNEL(blockIdx.x * blockDim.x + threadIdx.x, 0, __PRETTY_FUNCTION__);
+#endif
   scalar x0, x1, y0, y1;
   bool collision = false;
   x0 = pt0(x_idx); y0 = pt0(y_idx);
@@ -79,6 +91,9 @@ bool line_circle_collision(const p1_t &pt0, const p2_t &pt1, const Iterable &obs
       break;
     }
   }
+#ifdef TRACE_CUDA
+  TRACE_KERNEL(blockIdx.x * blockDim.x + threadIdx.x, 0, __FUNCTION__, "OK");
+#endif
   return collision;
 }
 
@@ -87,6 +102,9 @@ ATTRIBUTE
 inline
 bool parametrized_line_circle_collision(const p1_t &p1, const p2_t &p2, const scalar &t0, const scalar &t1, const ArrayLike &obs, const scalar &collision_radius)
 {
+#ifdef TRACE_CUDA
+  TRACE_KERNEL(blockIdx.x * blockDim.x + threadIdx.x, 0, __PRETTY_FUNCTION__);
+#endif
   auto collision = false;
   scalar dt = (t1-t0)/segment;
   auto dpx = p2(x_idx) - p1(x_idx);
@@ -95,8 +113,17 @@ bool parametrized_line_circle_collision(const p1_t &p1, const p2_t &p2, const sc
   auto p2_test = p1;
   p1_test(x_idx) = p1(x_idx);
   p1_test(y_idx) = p1(y_idx);
-  auto obs_t0 = obs;
-  auto obs_t1 = obs;
+  using ObsType = std::decay_t<decltype(obs[0])>;
+#ifndef __CUDA_ARCH__
+  // auto obs_t0 = obs;
+  // auto obs_t1 = obs;
+  std::vector<ObsType> obs_t0, obs_t1;
+  obs_t0.resize(obs.size());
+  obs_t1.resize(obs.size());
+#else
+  RangeWrapper<ObsType> obs_t0(obs.size());
+  RangeWrapper<ObsType> obs_t1(obs.size());
+#endif
   for(size_t i=1; i<=segment; i++) {
     scalar ti = t0+(i-1)*dt;
     scalar tf = ti+dt;
@@ -113,6 +140,9 @@ bool parametrized_line_circle_collision(const p1_t &p1, const p2_t &p2, const sc
     }
     p1_test = p2_test;
   }
+#ifdef TRACE_CUDA
+  TRACE_KERNEL(blockIdx.x * blockDim.x + threadIdx.x, 0, __FUNCTION__, "OK");
+#endif
   return collision;
 }
 

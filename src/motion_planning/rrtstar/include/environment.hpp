@@ -8,6 +8,14 @@
 #include "collision.hpp"
 #include "random.hpp"
 
+#ifndef NDEBUG
+#include "util.h"
+//#define TRACE_EXEC
+#ifdef __NVCC__
+//#define TRACE_CUDA
+#endif
+#endif
+
 #ifdef GPU
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -271,9 +279,15 @@ struct DynamicRobosoccer
   inline
   std::array<DynamicObstacle<scalar>,n>
   at (scalar time) {
+#ifdef TRACE_EXEC
+    TRACE_FN(__PRETTY_FUNCTION__);
+#endif
     std::array<DynamicObstacle<scalar>,n> ret;
     for(size_t i=0; i<ret.size(); i++)
-      ret[i] = obs[i](time);
+      ret[i] = obs.at(i)(time);
+#ifdef TRACE_EXEC
+    DEBUG_PRINT(__FUNCTION__,"OK");
+#endif
     return ret;
   }
 

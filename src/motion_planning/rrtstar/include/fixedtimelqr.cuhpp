@@ -157,22 +157,22 @@ inline void compute_cost(const State& xi, const State& xf, scalar *time, scalar 
   // typedef decltype(cost_fn(xi,xf,t)) Cost;
   scalar t;
   scalar c;
-  if(xi != xf) {
+  // if(xi != xf) {
 #ifdef TRACE_CUDA
   TRACE_KERNEL(id,0,"compute time");
 #endif
-    t = opt_time_solver(xi,xf,1e-2,1e-6,1e-2);
+  t = opt_time_solver(xi,xf,1e-2,1e-6,1e-2);
 #ifdef TRACE_CUDA
   TRACE_KERNEL(id,0,"compute time","OK");
 #endif
 #ifdef TRACE_CUDA
   TRACE_KERNEL(id,0,"compute cost");
 #endif
-    c = cost_fn(xi,xf,t);
+  c = cost_fn(xi,xf,t);
 #ifdef TRACE_CUDA
   TRACE_KERNEL(id,0,"compute cost","OK");
 #endif
-  }
+  // }
   time[id] = t;
   cost[id] = c;
 #ifdef TRACE_CUDA

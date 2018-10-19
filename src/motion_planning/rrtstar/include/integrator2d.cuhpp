@@ -48,13 +48,7 @@ void kernel_solver(State *s0, State *s1, Trajectory trajectory, InputMat *B, Inp
     auto xf = s1[id];
     auto r_mat = *R;
     auto b_mat = *B;
-#ifdef TRACE_CUDA
-  TRACE_KERNEL(id,0,"solve_trajectory");
-#endif
     solve_trajectory<Models::Integrator2DSSComposite::StateType,segment>(xi, xf, ots, g, ss_expm, cmp_expm, r_mat, b_mat, trajectory, id);
-#ifdef TRACE_CUDA
-  TRACE_KERNEL(id,0,"solve_trajectory: OK");
-#endif
     // compute_cost(s0[id], s1[id], cost, ots, cost_fn, id);
   }
 #ifdef TRACE_CUDA

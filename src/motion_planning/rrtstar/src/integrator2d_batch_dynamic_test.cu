@@ -1,5 +1,10 @@
 #include <boost/filesystem.hpp>
 #include "integrator2drrt.cuhpp"
+#include "util.h"
+
+#ifndef NDEBUG
+#define TRACE_EXEC
+#endif
 
 int main(int argc, char** argv)
 {
@@ -52,23 +57,42 @@ int main(int argc, char** argv)
     auto vis_t1 = ros::Time::now();
     auto dt = vis_t1-vis_t0;
     ROS_INFO("dt : %f", dt.toSec());
+    /*
     if(dt.toSec() > 0.5) {
       ROS_INFO("adding visual..");
       double tf = 10.0;
       double delta = 0.2;
       auto iter = tf/delta;
       auto r = env.collision_radius;
+#ifdef TRACE_EXEC
+      TRACE_FN("adding circles");
+#endif
       for(size_t i=0; i<iter; i++) {
         // draw dynamic obstacles, with black(0.0,0.0,0.0) color,
         // and decreasing opacity over time
         vis.add_circles(env.at(i*delta),r,delta,(i*delta),0.0,0.0,0.0,(iter-i)/iter,"_obstacles");
       }
+#ifdef TRACE_EXEC
+      DEBUG_PRINT("adding circles", "done");
+#endif
       // draw 3d trajectory : xy pos (index 0,1) in xy-plane and time (index 4) as z-plane
       // with green color (0.0,1.0,0.0) and 0.1 opacity
+#ifdef TRACE_EXEC
+      TRACE_FN("adding trajectories");
+#endif
       vis.add_trajectories<3,0,1,4>(tree.trajectories,0.0,1.0,0.0,0.1,"_exploration");
+#ifdef TRACE_EXEC
+      DEBUG_PRINT("adding trajectories", "done");
+#endif
       if(rrt.goalIndex() > 0) {
+#ifdef TRACE_EXEC
+      TRACE_FN("adding goal");
+#endif
         auto goal = tree.get_trajectory(rrt.goalIndex());
         vis.add_trajectories<3,0,1,4>(goal,1.0,1.0,1.0,1.0,"_goal");
+#ifdef TRACE_EXEC
+      DEBUG_PRINT("adding goal","ok");
+#endif
       }
       ROS_INFO("publish visual..");
       // clear all before re-drawing
@@ -77,6 +101,7 @@ int main(int argc, char** argv)
       vis.clear();
       vis_t0 = vis_t1;
     }
+    */
 
     duration.sleep();
   }

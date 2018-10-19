@@ -8,9 +8,13 @@
 #include <cuda_runtime.h>
 #define TRACE_KERNEL_STR1(ID, DEBUG_ID, STR) { if(ID == DEBUG_ID) printf("[%d] %s\n",ID,STR); }
 #define TRACE_KERNEL_STR2(ID, DEBUG_ID, STR1, STR2) { if(ID == DEBUG_ID) {printf("[%d] %s: %s\n",ID,STR1,STR2);} }
+#ifndef ATTRIBUTE
 #define ATTRIBUTE __host__ __device__
+#endif
 #else
+#ifndef ATTRIBUTE
 #define ATTRIBUTE
+#endif
 #endif
 
 #define DEBUG_PRINT(VAR, VAL) { print(VAR, VAL); }
