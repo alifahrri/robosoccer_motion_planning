@@ -47,6 +47,22 @@ private:
   }
 
 public:
+  template <size_t dim, size_t x_idx = 0, size_t y_idx = 1, size_t z_idx = 2, typename PointType>
+  void add_point(const PointType &pt, double r = 1.0f, double g = 0.0f, double b = 0.0f, double alpha = 1.0f, const std::string ns = std::string(""))
+  {
+    visualization_msgs::Marker pts;
+    std_msgs::ColorRGBA color;
+    color.r = r; color.g = g; color.b = b; color.a = alpha;
+    pts.header.frame_id = "/map";
+    pts.header.seq = seq;
+    pts.id = marker_array.markers.size();
+    pts.header.stamp = ros::Time::now();
+    pts.ns = std::string("point") + pfix + ns;
+    pts.type = visualization_msgs::Marker::POINTS;
+    pts.scale.x = pts.scale.y = pts.scale.z = POINT_SCALE;
+    add_point<dim,x_idx,y_idx,z_idx>(pts,pt,r,g,b,alpha);
+    marker_array.markers.push_back(pts);
+  }
   template <size_t dim, size_t x_idx = 0, size_t y_idx = 1, size_t z_idx = 2, typename Iterable>
   inline
   void add_points(const Iterable &nodes, double r = 1.0f, double g = 0.0f, double b = 0.0f, double alpha = 1.0f, const std::string ns = std::string(""))

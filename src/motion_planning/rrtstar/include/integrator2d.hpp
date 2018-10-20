@@ -7,7 +7,7 @@
 //#include "lqrsolver.hpp"
 //#include "feedbackcontroller.hpp"
 
-#ifdef GPU
+#ifdef __NVCC__
 #include <cuda.h>
 #include <cuda_runtime.h>
 #define ATTRIBUTE __host__ __device__

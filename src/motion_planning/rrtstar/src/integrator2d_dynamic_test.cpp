@@ -31,10 +31,13 @@ int main(int argc, char** argv)
   auto &rrt = Kinodynamic::rrtstar_int2d_timespace_obs;
   auto &tree = Kinodynamic::tree_int2d;
   auto &env = Kinodynamic::dynamic_soccer_env;
+  auto &sampler = Kinodynamic::sampler_dynamic_env;
+  auto &goal = Kinodynamic::goal_dynamic_env;
+  auto &connector = Kinodynamic::connector;
 
   env.setRandomObstacles();
-  auto xg = Kinodynamic::goal_dynamic_env.randomGoal();
-  auto xs = Kinodynamic::sampler();
+  auto xg = goal.randomGoal();
+  auto xs = sampler();
   rrt.setStart(xs);
   // rrt.setIteration(0);
 
@@ -70,6 +73,12 @@ int main(int argc, char** argv)
         auto goal = tree.get_trajectory(rrt.goalIndex());
         vis.add_trajectories<3,0,1,4>(goal,1.0,1.0,1.0,1.0,"_goal");
       }
+      // draw start and goal in 2D
+      vis.add_point<2,0,1>(xs, 1.0f, 0.0f, 0.0f, 1.0f, "_start");
+      vis.add_point<2,0,1>(xg, 0.0f, 0.0f, 1.0f, 1.0f, "_goal");
+      vis.add_point<2,0,1>(sampler.last_sample(), 0.0f, 1.0f, 1.0f, 1.0f, "_last_sampled");
+      auto last_edge = connector.last_connection();
+      vis.add_trajectories<3,0,1,4>(std::vector<decltype(last_edge)>{last_edge}, 1.0f, 0.0f, 0.0f, 1.0f, "_last_connection");
       ROS_INFO("publish visual..");
       // clear all before re-drawing
       vis.delete_all();

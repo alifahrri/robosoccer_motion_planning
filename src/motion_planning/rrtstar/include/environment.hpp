@@ -168,12 +168,12 @@ struct DynamicObstacle : public std::array<scalar,4>
   }
 
 #ifdef __NVCC__
-  __device__
+  __host__ __device__
   inline
   scalar& operator[](size_t i) {
     return state[i];
   }
-  __device__
+  __host__ __device__
   inline
   const scalar& operator[](size_t i) const {
     return state[i];

@@ -163,7 +163,9 @@ public:
     {
       auto opt_time = opt_time_solver.solve(xi,xf);
       auto dt = opt_time/segment;
-      auto d_opt = G(opt_time).inverse()*(xf-system.expm(opt_time)*xi);
+      auto g_mat = G(opt_time);
+      auto g_inv = g_mat.inverse();
+      auto d_opt = g_inv*(xf-system.expm(opt_time)*xi);
       CompositeState cmp_state;
       cmp_state << xf, d_opt;
       // ret.push_back(std::make_tuple(TimeIdx(0.0),xi,Input()));

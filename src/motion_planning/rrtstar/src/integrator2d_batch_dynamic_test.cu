@@ -57,7 +57,6 @@ int main(int argc, char** argv)
     auto vis_t1 = ros::Time::now();
     auto dt = vis_t1-vis_t0;
     ROS_INFO("dt : %f", dt.toSec());
-    /*
     if(dt.toSec() > 0.5) {
       ROS_INFO("adding visual..");
       double tf = 10.0;
@@ -101,7 +100,6 @@ int main(int argc, char** argv)
       vis.clear();
       vis_t0 = vis_t1;
     }
-    */
 
     duration.sleep();
   }

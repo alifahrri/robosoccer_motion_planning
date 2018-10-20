@@ -115,8 +115,14 @@ struct Connector
 
   Connector(Models::Integrator2DTrajectorySolver &solver, TreeInt2D &tree)
     : solver(solver), tree(tree) {}
-  Edge operator()(const state_t &s0, const state_t &s1) const;
-
+  inline
+  Edge operator()(const state_t &s0, const state_t &s1) ;
+  inline
+  Edge last_connection()
+  {
+    return e;
+  }
+  Edge e; // last connection
   Models::Integrator2DTrajectorySolver &solver;
   TreeInt2D &tree;
 };
@@ -319,18 +325,23 @@ struct TreeInt2D
   Trajectories<scalar,state_t,segment> trajectories;
 };
 
-Connector::Edge Connector::operator()(const state_t &s0, const state_t &s1) const {
-  Models::Integrator2DSS::StateType xi;
-  Models::Integrator2DSS::StateType xf;
-  for(size_t i=0; i<4; i++) {
-    xi(i) = s0(i);
-    xf(i) = s1(i);
-  }
-  auto trajectory = solver.solve<segment>(xi, xf);
+inline
+Connector::Edge Connector::operator()(const state_t &s0, const state_t &s1) {
+  // Models::Integrator2DSS::StateType xi;
+  // Models::Integrator2DSS::StateType xf;
+  // for(size_t i=0; i<4; i++) {
+    // xi(i) = s0(i);
+    // xf(i) = s1(i);
+  // }
+  auto trajectory = solver.solve<segment>(s0, s1);
   auto ti_idx = tree.last_checked_idx;
   auto t0 = 0.0;
-  if(ti_idx >= 0) t0 = std::get<0>(tree.trajectories.at(ti_idx).back());
-  return Trajectory<scalar,state_t,segment>(trajectory) + t0;
+  e = Trajectory<scalar,state_t,segment>(trajectory);
+  if(ti_idx > 0) {
+    t0 = std::get<0>(tree.trajectories.at(ti_idx).back());
+    e = e + t0;
+  }
+  return e;
 }
 
 #define SAMPLE_X0 (11.0)
@@ -499,6 +510,7 @@ struct Sampler
     {-SAMPLE_X0,-SAMPLE_X1,-SAMPLE_X2,-SAMPLE_X3},
     {SAMPLE_X0,SAMPLE_X1,SAMPLE_X2,SAMPLE_X3});
   }
+
   inline
   state_t operator()()
   {
@@ -509,6 +521,12 @@ struct Sampler
     while(env.collide(s))
       (*rg)(s);
 #endif
+    return s;
+  }
+
+  inline
+  state_t last_sample()
+  {
     return s;
   }
 

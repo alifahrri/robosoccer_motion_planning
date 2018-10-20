@@ -1,0 +1,4 @@
+<launch>
+  <node name="rrtstar_batch_integrator2d_dynamic_test" pkg="rrtstar" type="rrtstar_batch_integrator2d_dynamic_test"/>
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find rrtstar)/rviz/int2d_config.rviz"/>
+</launch>
