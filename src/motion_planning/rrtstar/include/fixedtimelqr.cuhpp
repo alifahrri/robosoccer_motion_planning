@@ -111,9 +111,9 @@ inline void copy_cost(CostGPU<Scalar> *dst, CostGPU<Scalar> *src, cudaMemcpyKind
 
 // separate definition for GPU because it turns out class definition is (maybe) too big for device code
 // define composite state first, because it is used internally there's no way to deduce automatically
-template <typename CompositeState, int segment = 10, typename State, typename OptTimeSolver, typename Gramian, typename SystemExpm, typename CompositeSystemExpm, typename InputWeight, typename InputMatrix, typename Trajectory>
+template <typename CompositeState, int segment = 10, typename State, typename OptTimeSolver, typename Gramian, typename SystemExpm, typename CompositeSystemExpm, typename InputWeight, typename InputMatrix, typename Scalar, typename Input>
 ATTRIBUTE
-inline void solve_trajectory(const State& xi, const State& xf, const OptTimeSolver &opt_time_solver, const Gramian &G, const SystemExpm &system_expm, const CompositeSystemExpm &cmp_sys_expm, const InputWeight &R, const InputMatrix &B, Trajectory &ret, size_t id = 0)
+inline void solve_trajectory(const State& xi, const State& xf, const OptTimeSolver &opt_time_solver, const Gramian &G, const SystemExpm &system_expm, const CompositeSystemExpm &cmp_sys_expm, const InputWeight &R, const InputMatrix &B, Scalar *time, State *states, Input *inputs, size_t id = 0)
 {
 #ifdef TRACE_CUDA
   TRACE_KERNEL(id,0,__PRETTY_FUNCTION__);
@@ -137,9 +137,13 @@ inline void solve_trajectory(const State& xi, const State& xf, const OptTimeSolv
     for(int k=s.rows()/2; k<s.rows(); k++)
       yt(k-s.rows()/2) = s(k);
     auto ctrl = R.inverse() * B.transpose() * yt;
-    ret.time[id*(segment+1)+i] = t;
-    ret.states[id*(segment+1)+i] = state;
-    ret.inputs[id*(segment+1)+i] = ctrl;
+    auto idx = id*(segment+1)+i;
+    time[idx] = t;
+    states[idx] = state;
+    inputs[idx] = ctrl;
+    // ret.time[id*(segment+1)+i] = t;
+    // ret.states[id*(segment+1)+i] = state;
+    // ret.inputs[id*(segment+1)+i] = ctrl;
   }
 #ifdef TRACE_CUDA
   TRACE_KERNEL(id,0,__FUNCTION__,"OK");

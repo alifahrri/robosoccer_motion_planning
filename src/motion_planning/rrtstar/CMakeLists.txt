@@ -103,9 +103,9 @@ target_link_libraries(rrtstar integrator2d_model ${lapacke_LIBRARIES} ${Boost_LI
 set_target_properties(rrtstar PROPERTIES LINKER_LANGUAGE CXX)
 
 if(CUDA_FOUND)
-  cuda_add_library(integrator2d_cuda_model include/integrator2d.cuhpp include/fixedtimelqr.cuhpp include/device_util.cuh)
+  cuda_add_library(integrator2d_cuda_model include/integrator2d.cuhpp include/fixedtimelqr.cuhpp include/util.cuh)
   target_link_libraries(integrator2d_cuda_model integrator2d_model cuda cudart)
-  cuda_add_library(cuda_rrtstar include/integrator2drrt.cuhpp include/environment.cuhpp include/device_util.cuh)
+  cuda_add_library(cuda_rrtstar include/integrator2drrt.cuhpp include/environment.cuhpp include/util.cuh)
   target_link_libraries(cuda_rrtstar integrator2d_cuda_model rrtstar cuda cudart)
 endif()
 

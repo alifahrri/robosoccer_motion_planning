@@ -17,7 +17,7 @@ typedef Models::Integrator2DOptTimeSolver TimeSolver;
 #define TEST_NEIGHBOR (150)
 #define TEST_NODES (2000)
 
-static void bm_opt_time_solver(benchmark::State &state) {
+static void opt_time_solver(benchmark::State &state) {
   // auto &time_diff = Models::integrator2d_opt_time_diff;
   auto &time_solver = Models::integrator2d_opt_time_solver;
   state_t s0, s1;
@@ -27,9 +27,9 @@ static void bm_opt_time_solver(benchmark::State &state) {
   for(auto _ : state)
     time_solver.solve(s0, s1);
 }
-BENCHMARK(bm_opt_time_solver);
+BENCHMARK(opt_time_solver);
 
-static void bm_control(benchmark::State &state) {
+static void control(benchmark::State &state) {
   auto &connector = Kinodynamic::connector;
   auto &sampler = Kinodynamic::sampler_dynamic_env;
   auto s0 = sampler();
@@ -38,9 +38,9 @@ static void bm_control(benchmark::State &state) {
   for(auto _ : state)
     connector(s0, s1);
 }
-BENCHMARK(bm_control);
+BENCHMARK(control);
 
-static void bm_collision_static_env(benchmark::State &state) {
+static void collision_static_env(benchmark::State &state) {
   auto &env = Kinodynamic::robosoccer_env;
   auto &connector = Kinodynamic::connector;
   auto &collision = Kinodynamic::checker;
@@ -53,9 +53,9 @@ static void bm_collision_static_env(benchmark::State &state) {
   for(auto _ : state)
     collision(edge);
 }
-BENCHMARK(bm_collision_static_env);
+BENCHMARK(collision_static_env);
 
-static void bm_collision_dynamic_env(benchmark::State &state) {
+static void collision_dynamic_env(benchmark::State &state) {
   auto &env = Kinodynamic::dynamic_soccer_env;
   auto &connector = Kinodynamic::connector;
   auto &collision = Kinodynamic::checker_time_space;
@@ -68,9 +68,61 @@ static void bm_collision_dynamic_env(benchmark::State &state) {
   for(auto _ : state)
     collision(edge);
 }
-BENCHMARK(bm_collision_dynamic_env);
+BENCHMARK(collision_dynamic_env);
 
-static void bm_grow_dynamic_env(benchmark::State &state) {
+static void tree_nearest_args(benchmark::internal::Benchmark *b) {
+  for(size_t i=1; i<5000; i+=100)
+    b->Arg(i);
+}
+
+static void tree_insert_args(benchmark::internal::Benchmark *b) {
+  for(size_t i=1; i<3000; i+=100)
+    b->Arg(i);
+}
+
+static void tree_nearest(benchmark::State &state) {
+  auto &tree = Kinodynamic::tree_int2d;
+  auto &radius = Kinodynamic::radius;
+  auto xs = Kinodynamic::sampler();
+  tree.reset();
+  auto n = state.range(0);
+  tree.insert(xs, -1);
+  for(size_t i=0; i<n; i++) {
+    auto x = Kinodynamic::sampler();
+    tree.insert(x,0);
+  }
+
+  auto x = Kinodynamic::sampler();
+  for(auto _ : state) {
+    tree.nearest(x,radius(n));
+  }
+}
+BENCHMARK(tree_nearest)->Apply(tree_nearest_args);
+
+static void tree_insert(benchmark::State &state) {
+  auto &tree = Kinodynamic::tree_int2d;
+  tree.reset();
+  auto n = state.range(0);
+
+  for(auto _ : state) {
+    for(size_t i=0; i<n; i++) {
+      auto x = Kinodynamic::sampler();
+      tree.insert(x,0);
+    }
+  }
+}
+BENCHMARK(tree_insert)->Apply(tree_insert_args);
+
+static void cost(benchmark::State &state) {
+  auto &cost = Kinodynamic::cost_int2d;
+  auto xi = Kinodynamic::sampler();
+  auto xf = Kinodynamic::sampler();
+  for(auto _ : state)
+    cost(xi, xf);
+}
+BENCHMARK(cost);
+
+static void grow_dynamic_env(benchmark::State &state) {
   auto &rrt = Kinodynamic::rrtstar_int2d_timespace_obs;
   auto &tree = Kinodynamic::tree_int2d;
   auto &env = Kinodynamic::dynamic_soccer_env;
@@ -88,27 +140,14 @@ static void bm_grow_dynamic_env(benchmark::State &state) {
   }
   // state.SetBytesProcessed(int64_t(state.iterations()) * int64_t(state.range(0)));
 }
-BENCHMARK(bm_grow_dynamic_env)->ComputeStatistics("solved",[](const std::vector<double>& s)->double{
+BENCHMARK(grow_dynamic_env)->ComputeStatistics("solved",[](const std::vector<double>& s)->double{
   auto sol = 0.0;
   for(const auto v : s)
     sol = (v>=0.0 ? 1.0 : sol);
   return sol;
 })->Range(10, 1000);
 
-static void bm_neighbor_args(benchmark::internal::Benchmark *b) {
-//  for(size_t i=100; i<=1000; i+=100)
-//    for(size_t j=11; j<=151; j+=10)
-//      b->Args({i,j});
-  for(size_t i=11;  i<=TEST_NEIGHBOR; i+=10)
-    b->Arg(i);
-}
-
-static void bm_nodes_arg(benchmark::internal::Benchmark *b) {
-  for(size_t i=100; i<=TEST_NODES; i+=100)
-    b->Arg(i);
-}
-
-static void bm_neighbor_dynamic_env(benchmark::State &state) {
+static void neighbor_dynamic_env(benchmark::State &state) {
   auto &rrt = Kinodynamic::rrtstar_int2d_timespace_obs;
   auto &tree = Kinodynamic::tree_int2d;
   auto &env = Kinodynamic::dynamic_soccer_env;
@@ -129,14 +168,28 @@ static void bm_neighbor_dynamic_env(benchmark::State &state) {
     benchmark::DoNotOptimize(rrt.goalIndex());
   }
 }
-BENCHMARK(bm_neighbor_dynamic_env)->ComputeStatistics("solved",[](const std::vector<double>& s)->double{
+
+static void bm_neighbor_args(benchmark::internal::Benchmark *b) {
+//  for(size_t i=100; i<=1000; i+=100)
+//    for(size_t j=11; j<=151; j+=10)
+//      b->Args({i,j});
+  for(size_t i=11;  i<=TEST_NEIGHBOR; i+=10)
+    b->Arg(i);
+}
+
+static void bm_nodes_arg(benchmark::internal::Benchmark *b) {
+  for(size_t i=100; i<=TEST_NODES; i+=100)
+    b->Arg(i);
+}
+
+BENCHMARK(neighbor_dynamic_env)->ComputeStatistics("solved",[](const std::vector<double>& s)->double{
   auto sol = 0.0;
   for(const auto v : s)
     sol = (v>=0.0 ? 1.0 : sol);
   return sol;
 })->Apply(bm_neighbor_args);
 
-BENCHMARK(bm_neighbor_dynamic_env)->ComputeStatistics("solved",[](const std::vector<double>& s)->double{
+BENCHMARK(neighbor_dynamic_env)->ComputeStatistics("solved",[](const std::vector<double>& s)->double{
   auto sol = 0.0;
   for(const auto v : s)
     sol = (v>=0.0 ? 1.0 : sol);

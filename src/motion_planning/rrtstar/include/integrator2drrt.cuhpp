@@ -21,6 +21,7 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 }
 #endif
 
+#include "util.cuh"
 #include "util.h"
 // some manual function print to trace execution
 // this NDEBUG is from cmake when on {RELEASE or MINSIZEREL} mode
@@ -71,6 +72,7 @@ struct BatchCollisionTimeSpaceChecker
     // typedef std::decay_t<decltype(s1.at(0))> fStateType; // error
     using iStateType = std::decay_t<decltype(s0.at(0))>;
     using fStateType = std::decay_t<decltype(s1.at(0))>;
+    using EdgeType = std::decay_t<decltype(edges.at(0))>;
     std::vector<iStateType> test_pt0;
     std::vector<fStateType> test_pt1;
     std::vector<scalar> test_t0, test_t1;
@@ -79,7 +81,8 @@ struct BatchCollisionTimeSpaceChecker
         ModelsGPU::State *s_begin, ModelsGPU::State *s_end,
         ModelsGPU::Input *i_begin, ModelsGPU::Input *i_end)
     {
-      Connector::Edge e;
+      // Connector::Edge e;
+      EdgeType e;
       for(size_t i=0; i<=segment; i++) {
         e.at(i) = std::make_tuple(*t_begin, *s_begin);
         if(i>0) {
@@ -101,43 +104,28 @@ struct BatchCollisionTimeSpaceChecker
       costs.push_back(cost);
     };
     solver.solve<segment>(s0, s1, trajectory_inserter, cost_inserter);
-    // state_t  *dev_test_pt0;
-    // state_t  *dev_test_pt1;
-    iStateType  *dev_test_pt0;
-    fStateType  *dev_test_pt1;
-    scalar *dev_t0;
-    scalar *dev_t1;
-    bool *dev_collision;
-    auto test_n = test_pt0.size();
-    gpuErrchk(cudaMalloc(&dev_test_pt0, test_n*sizeof(iStateType)));
-    gpuErrchk(cudaMalloc(&dev_test_pt1, test_n*sizeof(fStateType)));
-    gpuErrchk(cudaMalloc(&dev_t0, test_n*sizeof(scalar)));
-    gpuErrchk(cudaMalloc(&dev_t1, test_n*sizeof(scalar)));
-    gpuErrchk(cudaMemcpy(dev_test_pt0, test_pt0.data(), test_n*sizeof(iStateType), cudaMemcpyHostToDevice));
-    gpuErrchk(cudaMemcpy(dev_test_pt1, test_pt1.data(), test_n*sizeof(fStateType), cudaMemcpyHostToDevice));
-    gpuErrchk(cudaMemcpy(dev_t0, test_t0.data(), test_n*sizeof(scalar), cudaMemcpyHostToDevice));
-    gpuErrchk(cudaMemcpy(dev_t1, test_t1.data(), test_n*sizeof(scalar), cudaMemcpyHostToDevice));
-    gpuErrchk(cudaMalloc(&dev_collision, test_n*sizeof(bool)));
-    env.batch_collide<true,x_idx,y_idx,segment,collision_segment>(dev_test_pt0, dev_test_pt1, dev_collision, dev_t0, dev_t1, test_n);
-    bool *host_collision = new bool[test_n];
-    gpuErrchk(cudaMemcpy(host_collision, dev_collision, test_n, cudaMemcpyDeviceToHost));
+    auto n_pts = test_pt0.size();
+    auto n_check = n_pts * (collision_segment+1);
+    // bool *host_collision = new bool[test_n];
+    static HostAllocator<bool> host_collision(INIT_OBJ_COUNT);
+    if(!host_collision.ok(n_check)) host_collision.resize(n_check);
+    env.batch_collide<x_idx,y_idx,segment,collision_segment>(test_pt0.data(), test_pt1.data(), host_collision.ptr, test_t0.data(), test_t1.data(), n_pts);
+
     // auto n_collision = test_n/(segment+1);
-    auto n_collision = costs.size();
-    for(size_t i=0; i<n_collision; i++) {
+    auto n_states = costs.size();
+    for(size_t i=0; i<n_states; i++) {
       auto collide = false;
       for(size_t j=0; j<segment; j++) {
-        auto id = i*(segment) + j;
-        collide = host_collision[id];
+        for(size_t k =0; k<(collision_segment+1); k++) {
+          auto id = i*(segment)*(collision_segment+1) + j*(collision_segment+1) + k;
+          // collide = host_collision[id];
+          collide = host_collision.ptr[id];
+          if(collide) break;
+        }
         if(collide) break;
       }
       collision.push_back(collide);
     }
-    gpuErrchk(cudaFree(dev_test_pt0));
-    gpuErrchk(cudaFree(dev_test_pt1));
-    gpuErrchk(cudaFree(dev_t0));
-    gpuErrchk(cudaFree(dev_t1));
-    gpuErrchk(cudaFree(dev_collision));
-    delete[] host_collision;
 #ifdef TRACE_EXEC
     DEBUG_PRINT(__FUNCTION__,"OK");
 #endif
@@ -260,10 +248,12 @@ struct BatchCollisionChecker
     };
     // ModelsGPU::SolverGPU solver;
     solver.solve<segment>(s0, states, trajectory_inserter, cost_inserter);
+    auto test_n = test_pt0.size();
+    bool *host_collision = new bool[test_n];
+#if 0
     state_t *dev_test_pt0;
     state_t *dev_test_pt1;
     bool *dev_collision;
-    auto test_n = test_pt0.size();
     gpuErrchk(cudaMalloc(&dev_test_pt0, test_n*sizeof(state_t)));
     gpuErrchk(cudaMalloc(&dev_test_pt1, test_n*sizeof(state_t)));
     gpuErrchk(cudaMemcpy(dev_test_pt0, test_pt0.data(), test_n*sizeof(state_t ), cudaMemcpyHostToDevice));
@@ -272,8 +262,9 @@ struct BatchCollisionChecker
     // call batch collision check with pointer already allocated on device
     // with x index 0, and y index 1
     env.batch_collide<true,x_idx,y_idx>(dev_test_pt0, dev_test_pt1, dev_collision, test_n);
-    bool *host_collision = new bool[test_n];
     gpuErrchk(cudaMemcpy(host_collision, dev_collision, test_n, cudaMemcpyDeviceToHost));
+#endif
+    env.batch_collide<x_idx,y_idx>(test_pt0.data(), test_pt1.data(), host_collision, test_n);
     auto n_collision = test_n/(segment+1);
     for(size_t i=0; i<n_collision; i++) {
       auto collide = false;
@@ -284,9 +275,11 @@ struct BatchCollisionChecker
       }
       collision.push_back(collide);
     }
+    /*
     gpuErrchk(cudaFree(dev_test_pt0));
     gpuErrchk(cudaFree(dev_test_pt1));
     gpuErrchk(cudaFree(dev_collision));
+    */
     delete[] host_collision;
 #ifdef TRACE_EXEC
     DEBUG_PRINT(__FUNCTION__,"OK");
