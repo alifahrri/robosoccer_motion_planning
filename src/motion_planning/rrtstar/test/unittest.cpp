@@ -1,19 +1,21 @@
 #include <gtest/gtest.h>
+#include <random>
 #include "integrator2drrt.hpp"
 #include "random.hpp"
 #include "states.hpp"
 #include "environment.hpp"
 
-typedef Kinodynamic::GoalChecker<Kinodynamic::StaticEnvironment> GoalChecker;
 typedef State<double,Models::n> state_t;
 typedef RandomGen<2,double> RandomGen2;
 typedef RandomGen<4,double> RandomGen4;
+typedef Kinodynamic::TreeInt2D TreeInt2D;
+typedef Kinodynamic::Connector Connector;
 typedef Kinodynamic::Sampler<Kinodynamic::StaticEnvironment> Sampler;
+typedef Kinodynamic::GoalChecker<Kinodynamic::StaticEnvironment> GoalChecker;
 typedef Robosoccer<> Environment;
 typedef Models::Integrator2DOptTimeDiff TimeDiff;
 typedef Models::Integrator2DOptTimeSolver TimeSolver;
 typedef Models::Integrator2DTrajectorySolver TrajectorySolver;
-typedef Kinodynamic::Connector Connector;
 typedef Models::Integrator2DSS Integrator2DSS;
 typedef Models::Integrator2DGramian Integrator2DGramian;
 typedef Models::Integrator2DClosedExpm Integrator2DClosedExpm;
@@ -35,10 +37,242 @@ TEST(TimeSolver,Solve) {
   EXPECT_NEAR(d_cost, 0.0, 0.0001) << d_cost;
 }
 
+TEST(TreeInt2D,insert)
+{
+  auto &tree = Kinodynamic::tree_int2d;
+  auto &sampler = Kinodynamic::sampler;
+  auto &connector = Kinodynamic::connector;
+  auto n = 100;
+  auto s = sampler();
+  tree.reset();
+  tree.insert(s, -1);
+  auto ok = true;
+  for(size_t i=0; i<n; i++) {
+    auto ts = tree.tree.size();
+    auto ps = tree.parent.size();
+    auto es = tree.trajectories.size();
+    if(((ts-1)!=i) || ((ps-1)!=i) || ((es-1)!=i)) ok = false;
+    auto s = sampler();
+    auto e = connector(tree(ts-1), s);
+    tree.insert(s, tree.tree.size()-1, e);
+  }
+  EXPECT_TRUE(ok);
+}
+
+using RRT = decltype(Kinodynamic::rrtstar_int2d_timespace_obs);
+
+TEST(RRT,grow)
+{
+  auto &rrt = Kinodynamic::rrtstar_int2d_timespace_obs;
+  auto &tree = Kinodynamic::tree_int2d;
+  auto &env = Kinodynamic::dynamic_soccer_env;
+  auto &checker = Kinodynamic::checker_time_space;
+  auto &sampler = Kinodynamic::sampler_dynamic_env;
+  auto &goal = Kinodynamic::goal_dynamic_env;
+  auto &connector = Kinodynamic::connector;
+  auto min = sampler.rg->min();
+  auto max = sampler.rg->max();
+
+  env.setRandomObstacles();
+  auto xg = goal.randomGoal();
+  auto xs = sampler();
+  rrt.setStart(xs);
+  auto solved = false;
+  auto n = 100;
+
+  std::stringstream ss;
+  auto ok = true;
+  for(size_t i=0; i<n; i++) {
+    auto ts = tree.tree.size();
+    auto ps = tree.parent.size();
+    auto es = tree.trajectories.size();
+    solved = rrt.grow(&xg);
+    auto tree_size = tree.tree.size();
+    // check if tree start is right
+    if(tree(0)!=xs)
+    {
+      ss << "start state changed; ";
+      ok = false;
+    }
+  }
+  {
+    auto ts = tree.tree.size();
+    auto ps = tree.parent.size();
+    auto es = tree.trajectories.size();
+    // check if tree, parent, and trajectory size matched
+    if((ts != ps) || (ps != es) || (ts != es))
+    {
+      ss << "tree (or parent or trajectory) has different size; ";
+      ok = false;
+    }
+    if(ok)
+      for(size_t i=1; i<ts; i++) {
+        auto s0_t = tree.trajectories.at(i).path().front();
+        auto s1_t = tree.trajectories.at(i).path().back();
+        auto s0_p = tree.tree(tree.parent.at(i));
+        auto s1_p = tree.tree(i);
+        auto printer = [](decltype(s0_t) s){
+          std::stringstream ss;
+          ss << "[";
+          for(size_t i=0; i<4; i++)
+            ss << s(i) << (i==3 ? "] " : " ");
+          return ss.str();
+        };
+        auto near = [](decltype(s0_t) t, decltype(s0_t) p, double e, double *err, int *id)
+        {
+          auto n = true;
+          for(size_t i=0; i<4; i++) {
+            *err = fabs(t(i) - p(i));
+            if(*err > e) {
+              n = false;
+              *id = i;
+              break;
+            }
+          }
+          return n;
+        };
+        auto in_range = [](decltype(s0_t) s, decltype(min) min, decltype(max) max)
+        {
+          auto ok = true;
+          for(size_t i=0; i<4; i++) {
+            if((s(i) < min[i]) || s(i) > max[i]) {
+              ok = false;
+              break;
+            }
+          }
+          return ok;
+        };
+        double s0_err, s1_err;
+        int id0 = 0, id1 = 0;
+        // check if tree, parent, and trajectory is consistent
+        if(!near(s0_t, s0_p, 1e-3, &s0_err, &id0) || !near(s1_t, s1_p, 1e-3, &s1_err, &id1))
+        {
+          ss << "tree nodes didn't match: "
+             << "front : "<< printer(s0_t)
+             << "parent : " << printer(s0_p)
+             << "err " <<  s0_err << " "
+             << "at : " << id0 << "; "
+             << "back : " << printer(s1_t)
+             << "node : " << printer(s1_p)
+             << "err " <<  s1_err
+             << "at : " << id1 << "; ";
+          ok = false;
+          break;
+        }
+        if(!in_range(s1_p, min, max)) {
+          ss << "some value are outside sampler range!";
+          ok = false;
+          break;
+        }
+      }
+  }
+  EXPECT_TRUE(ok) << ss.str();
+}
+
+TEST(TreeInt2D,retrieve)
+{
+  auto &tree = Kinodynamic::tree_int2d;
+  auto &sampler = Kinodynamic::sampler;
+  auto &connector = Kinodynamic::connector;
+  auto n = 100;
+  auto s = sampler();
+  auto ls = s;
+  tree.reset();
+  tree.insert(s, -1);
+  auto ok = true;
+  for(size_t i=0; i<n; i++) {
+    auto ts = tree.tree.size();
+    auto ps = tree.parent.size();
+    auto es = tree.trajectories.size();
+    if(tree(i)!=ls) ok = false;
+    auto s = sampler();
+    auto e = connector(tree(ts-1), s);
+    tree.insert(s, tree.tree.size()-1, e);
+    ls = s;
+  }
+  EXPECT_TRUE(ok);
+}
+
+TEST(TreeInt2D,parent)
+{
+  auto &tree = Kinodynamic::tree_int2d;
+  auto &sampler = Kinodynamic::sampler;
+  auto &connector = Kinodynamic::connector;
+  auto n = 100;
+  auto s = sampler();
+  tree.reset();
+  tree.insert(s, -1);
+  auto lp = -1;
+  auto ok = true;
+  for(size_t i=0; i<n; i++) {
+    auto ts = tree.tree.size();
+    auto ps = tree.parent.size();
+    auto es = tree.trajectories.size();
+    if(i>0)
+      if(tree.parent.at(i-1) != lp) ok = false;
+    auto s = sampler();
+    auto e = connector(tree(ts-1), s);
+    auto max = ts-1;
+    std::random_device rd;     // only used once to initialise (seed) engine
+    std::mt19937 rng(rd());    // random-number engine used (Mersenne-Twister in this case)
+    std::uniform_int_distribution<int> uni(0,max); // guaranteed unbiased
+    auto random_integer = uni(rng);
+    lp = random_integer;
+    tree.setParent(i, lp);
+    tree.insert(s, tree.tree.size()-1, e);
+  }
+  EXPECT_TRUE(ok);
+}
+
+TEST(TreeInt2D,edge)
+{
+  auto &tree = Kinodynamic::tree_int2d;
+  auto &sampler = Kinodynamic::sampler;
+  auto &connector = Kinodynamic::connector;
+  auto n = 100;
+  auto s = sampler();
+  auto le = connector(s, sampler());
+  tree.reset();
+  tree.insert(s, -1, le);
+  auto ok = true;
+  std::vector<int> failed;
+  if(tree.trajectories.back() != le)
+  {
+    failed.push_back(0);
+    ok = false;
+  }
+  if(ok)
+    for(size_t i=0; i<n; i++) {
+      auto ts = tree.tree.size();
+      auto ps = tree.parent.size();
+      auto es = tree.trajectories.size();
+      if(tree.trajectories.at(i) != le)
+      {
+        failed.push_back(i);
+        ok = false;
+      }
+      auto s = sampler();
+      auto e = connector(tree(ts-1), s);
+      tree.insert(s, ts-1, e);
+      auto s0 = sampler();
+      auto s1 = sampler();
+      e = connector(s0, s1);
+      tree.setEdge(ts, e);
+      le = e;
+    }
+  std::stringstream ss;
+  ss << "failed test : ";
+  for(auto i : failed)
+    ss << i << " ";
+  EXPECT_TRUE(ok) << ss.str();
+}
+
 TEST(Connector, Solve)
 {
   auto &connector = Kinodynamic::connector;
   auto &sampler = Kinodynamic::sampler;
+  auto &tree = Kinodynamic::tree_int2d;
+  tree.reset();
   auto s0 = sampler();
   auto s1 = sampler();
   auto connection = connector(s0,s1);

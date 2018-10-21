@@ -1,4 +1,4 @@
 <launch>
   <node name="rrtstar_geometric2d" pkg="rrtstar" type="rrtstar_geometric2d"/>
-  <node name="rviz" pkg="rviz" type="rviz"/>
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find rrtstar)/rviz/int2d_config.rviz"/>
 </launch>

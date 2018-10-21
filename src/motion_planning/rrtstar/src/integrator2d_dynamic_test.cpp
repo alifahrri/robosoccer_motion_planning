@@ -12,7 +12,7 @@ int main(int argc, char** argv)
   ros::NodeHandle node;
 
   Models::init_integrator2d();
-  RRTVisual vis(node, "test");
+  RRTVisual vis(node, "_test");
 
   ros::Rate rate(30.0f);
   ros::Duration duration(0,1);
@@ -31,6 +31,7 @@ int main(int argc, char** argv)
   auto &rrt = Kinodynamic::rrtstar_int2d_timespace_obs;
   auto &tree = Kinodynamic::tree_int2d;
   auto &env = Kinodynamic::dynamic_soccer_env;
+  auto &checker = Kinodynamic::checker_time_space;
   auto &sampler = Kinodynamic::sampler_dynamic_env;
   auto &goal = Kinodynamic::goal_dynamic_env;
   auto &connector = Kinodynamic::connector;
@@ -45,12 +46,12 @@ int main(int argc, char** argv)
   bool solved = false;
 
   while(ros::ok()) {
-    auto t0 = ros::Time::now();
     ROS_INFO("growing tree..");
+    auto t0 = ros::Time::now();
     solved = rrt.grow(&xg);
     auto tree_size = tree.tree.size();
-    ROS_INFO("tree size : %d;", tree_size);
     auto t1 = ros::Time::now();
+    ROS_INFO("tree size : %d;", tree_size);
 
     auto vis_t1 = ros::Time::now();
     auto dt = vis_t1-vis_t0;
@@ -79,6 +80,18 @@ int main(int argc, char** argv)
       vis.add_point<2,0,1>(sampler.last_sample(), 0.0f, 1.0f, 1.0f, 1.0f, "_last_sampled");
       auto last_edge = connector.last_connection();
       vis.add_trajectories<3,0,1,4>(std::vector<decltype(last_edge)>{last_edge}, 1.0f, 0.0f, 0.0f, 1.0f, "_last_connection");
+      /*
+      for(size_t i=0; i<5; i++) {
+        auto s = tree(0);
+        auto xr = sampler();
+        auto c = connector(s,xr);
+        {
+          auto r = 1.0f; auto g = 1.0f; auto b = 0.0f;
+          if(checker(c)) g = 0.0f;
+          vis.add_trajectories<3,0,1,4>(std::vector<decltype(c)>{c}, r, g, b, 1.0f, "_test");
+        }
+      }
+      */
       ROS_INFO("publish visual..");
       // clear all before re-drawing
       vis.delete_all();

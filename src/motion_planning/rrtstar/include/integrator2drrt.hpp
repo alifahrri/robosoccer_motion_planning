@@ -137,6 +137,7 @@ struct TreeInt2D
 
   TreeInt2D() {}
 
+  inline
   IndexList nearest(const State &s0, const scalar& radius)
   {
     IndexList ret;
@@ -146,6 +147,7 @@ struct TreeInt2D
     return ret;
   }
 
+  inline
   StateList states(const IndexList &indexes)
   {
     StateList ret;
@@ -154,6 +156,7 @@ struct TreeInt2D
     return ret;
   }
 
+  inline
   Index insert(const State &s, const Index &idx)
   {
     Index id = tree.size();
@@ -164,6 +167,7 @@ struct TreeInt2D
     return id;
   }
 
+  inline
   Index insert(const State &s, const Index &idx, const Connector::Edge &e)
   {
     Index id = tree.size();
@@ -180,11 +184,13 @@ struct TreeInt2D
 
   void reset()
   {
+    last_checked_idx = -1;
     tree.clear();
     parent.clear();
     trajectories.clear();
   }
 
+  inline
   void setParent(const Index &node, const Index &p)
   {
     if(int(parent.size()) < node+1)
@@ -192,6 +198,7 @@ struct TreeInt2D
     else parent.at(node) = p;
   }
 
+  inline
   void setEdge(const Index &n, const Connector::Edge &e)
   {
     auto edge = e;
@@ -210,6 +217,7 @@ struct TreeInt2D
     // return tree(i);
   // }
 
+  inline
   State& operator()(const Index &i)
   {
     last_checked_idx = i;

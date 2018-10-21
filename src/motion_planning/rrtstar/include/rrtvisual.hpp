@@ -80,20 +80,6 @@ public:
     pts.scale.x = pts.scale.y = pts.scale.z = POINT_SCALE;
     for(const auto& n : nodes) {
       add_point<dim,x_idx,y_idx,z_idx>(pts,n,r,g,b,alpha);
-//      for(size_t i=0; i<dim; i++) {
-//        switch (i) {
-//        case x_idx: p.x = n(x_idx);
-//          break;
-//        case y_idx: p.y = n(y_idx);
-//          break;
-//        case z_idx: p.z = n(z_idx);
-//          break;
-//        default:
-//          break;
-//        }
-//      }
-//      pts.colors.push_back(color);
-//      pts.points.push_back(p);
     }
     marker_array.markers.push_back(pts);
   }
