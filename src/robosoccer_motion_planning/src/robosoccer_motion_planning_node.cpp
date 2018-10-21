@@ -1,7 +1,14 @@
 #include <ros/ros.h>
+#include <type_traits>
 #include <rrtstar.hpp>
-#include <integrator2drrt.hpp>
+#include "integrator2drrt.hpp"
 #include "robotsubscriber.h"
+#include "robosoccer_visual.hpp"
+
+enum Environment {
+  Static,
+  Dynamic
+};
 
 int main(int argc, char **argv)
 {
@@ -17,9 +24,19 @@ int main(int argc, char **argv)
 
   auto &rrt = Kinodynamic::rrtstar_int2d;
   auto &env = Kinodynamic::robosoccer_env;
+  auto &goal = Kinodynamic::goal;
+  auto &sampler = Kinodynamic::sampler;
+
+  auto &rrt_dyn = Kinodynamic::rrtstar_int2d_timespace_obs;
+  auto &env_dyn = Kinodynamic::dynamic_soccer_env;
+  auto &goal_dyn = Kinodynamic::goal_dynamic_env;
+  auto &sampler_dyn = Kinodynamic::sampler_dynamic_env;
+
   auto &tree = Kinodynamic::tree_int2d;
 
-  auto set_start = [&rrt, &subs] () {
+  // generic lambdas :
+  // set starting state for rrt given the subscriber
+  auto set_start = [](auto &rrt, auto &subs) {
     auto s = subs.getState();
     Kinodynamic::TreeInt2D::State xs;
     xs(0) = s(0); xs(1) = s(1);
@@ -28,11 +45,57 @@ int main(int argc, char **argv)
     rrt.setStart(xs);
     rrt.setIteration(0);
   };
-
-  auto set_obstacles = [&rrt, &subs, &env] () {
+  // set obstacles for the environment
+  auto set_obstacles = [](auto &env, auto &subs) {
     env.setObstacles(subs.getObstacles());
   };
+  // some visualization stuff
+  auto visualize = [](auto &rrt, auto &tree, auto &env, auto &vis) {
+    call(rrt, tree, env, vis);
+    // clear all before re-drawing
+    vis.delete_all();
+    vis.publish();
+    vis.clear();
+  };
+  // create helper lambda to run the rrt
+  auto solve_rrt = [set_start, set_obstacles, visualize, &vis](auto &rrt, auto &subs, auto &env, auto &tree, auto *xg, size_t iteration) {
+    set_start(rrt, subs);
+    set_obstacles(env, subs);
+    auto solved = false;
+    auto t0 = ros::Time::now();
+    for(size_t i=0; i<iteration; i++)
+        solved = rrt.grow(xg);
+    auto t1 = ros::Time::now();
+    auto dt = t1 - t0;
+    if(tree.tree.size() > 0) {
+      visualize(rrt, tree, env, vis);
+    }
+    return std::make_pair(solved, dt.toSec());
+  };
 
+  auto xg = goal.randomGoal();
+
+  bool ds_param;
+  double ds_prob;
+  std::string env_param;
+  Environment robo_env = Static;
+  bool direct_sampling_en = false;
+  double direct_sampling_prob = 0.5;
+  if(ros::param::get("environment", env_param))
+    robo_env = (env_param == std::string("dynamic") ? Dynamic : Static);
+  if(ros::param::get("direct_sampling", ds_param))
+    direct_sampling_en = ds_param;
+  if(ros::param::get("direct_sampling_prob", ds_prob))
+    direct_sampling_prob = ds_prob;
+
+  if(direct_sampling_en) {
+    sampler.set_direct_sample(true, direct_sampling_prob);
+    sampler_dyn.set_direct_sample(true, direct_sampling_prob);
+    sampler.target = xg;
+    sampler_dyn.target = xg;
+  }
+
+  // receive ros messsage in separate threads
   ros::AsyncSpinner spinner(1);
   spinner.start();
 
@@ -43,37 +106,29 @@ int main(int argc, char **argv)
     rate.sleep();
   }
 
-  auto xg = Kinodynamic::goal.randomGoal();
+  auto max_iter = 100;
+  auto solved = false;
+  auto time = 0.0;
 
   while(ros::ok()) {
-    set_start();
-    set_obstacles();
-    auto solved = false;
-    auto max_iter = 100;
-    auto t0 = ros::Time::now();
-    for(size_t i=0; i<max_iter; i++) {
-      solved = rrt.grow(&xg);
-      // solved = rrt.insertGoal(xg);
-      // if(solved) break;
+    switch(robo_env) {
+    case Static :
+    {
+      auto sol = solve_rrt(rrt, subs, env, tree, &xg, max_iter);
+      solved = std::get<0>(sol);
+      time = std::get<1>(sol);
+      break;
     }
-    auto t1 = ros::Time::now();
-    auto dt = t1 - t0;
-    ROS_INFO("solution... xg(%f,%f,%f,%f) %s in %f s",xg(0),xg(1),xg(2),xg(3),(solved ? "found" : "not found"), dt.toSec());
-    if(tree.tree.size() > 0) {
-      vis.clear();
-      ROS_INFO("adding visual..");
-      auto r = Kinodynamic::checker.env.collision_radius;
-      for(const auto &o : Kinodynamic::checker.env.obs)
-        vis.add_obstacles(std::get<0>(o),std::get<1>(o),r);
-      vis.set_trajectories(tree.tree.cloud.states, tree.trajectories, tree.parent, 2, tree.tree.size());
-      if(solved) {
-        auto goal_trj = tree.get_trajectory(rrt.goalIndex());
-        for(const auto &t : goal_trj)
-          vis.set_trajectory(t.path(),2);
-      }
-      ROS_INFO("publish visual..");
-      vis.publish();
+    case Dynamic :
+    {
+      auto sol = solve_rrt(rrt_dyn, subs, env_dyn, tree, &xg, max_iter);
+      solved = std::get<0>(sol);
+      time = std::get<1>(sol);
+      break;
     }
+    }
+    ROS_INFO("solution... xg(%f,%f,%f,%f) %s in %f s", xg(0), xg(1), xg(2), xg(3),
+             (solved ? "found" : "not found"), time);
   }
 
   return 0;

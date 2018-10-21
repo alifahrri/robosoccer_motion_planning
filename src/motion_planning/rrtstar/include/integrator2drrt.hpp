@@ -513,22 +513,46 @@ struct CollisionChecker
 template <typename Environment>
 struct Sampler
 {
-  Sampler(Environment &env) : env(env) {
+  Sampler(Environment &env, bool direct_sample = false, double direct_sample_prob = 0.5)
+    : env(env)
+    , direct_sampling_enable(direct_sample)
+  {
     rg = new RandomGen<4,scalar>(
     {-SAMPLE_X0,-SAMPLE_X1,-SAMPLE_X2,-SAMPLE_X3},
     {SAMPLE_X0,SAMPLE_X1,SAMPLE_X2,SAMPLE_X3});
+    direct_sampler = new RandomGen<1,bool>({direct_sample_prob});
+  }
+
+  void set_direct_sample(bool en, double prob)
+  {
+    direct_sampling_enable = en;
+    if(direct_sampler->p[0] != prob) {
+      delete direct_sampler;
+      direct_sampler = new RandomGen<1,bool>({prob});
+    }
   }
 
   inline
   state_t operator()()
   {
+    if(!direct_sampling_enable) goto RANDOM_SAMPLE;
+    else if(*direct_sampler(0)) goto BIAS_SAMPLE;
+    else goto RANDOM_SAMPLE;
+
+    BIAS_SAMPLE :
+    s = target;
+    goto DONE;
+
+    RANDOM_SAMPLE :
     (*rg)(s);
     // for now dont compile this on cuda
-    // todo resolve
+    // @TODO : fix
 #ifndef __NVCC__
     while(env.collide(s))
       (*rg)(s);
 #endif
+
+    DONE :
     return s;
   }
 
@@ -539,7 +563,10 @@ struct Sampler
   }
 
   state_t s;
+  state_t target;
   Environment &env;
+  bool direct_sampling_enable = false;
+  RandomGen<1,bool> *direct_sampler;
   RandomGen<4,scalar> *rg = nullptr;
 };
 

@@ -129,6 +129,7 @@ include_directories(
 ## Declare a C++ library
 add_library(${PROJECT_NAME}
   src/robotsubscriber.cpp
+  include/robosoccer_visual.hpp
   )
 
 target_link_libraries(${PROJECT_NAME}
