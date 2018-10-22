@@ -10,6 +10,8 @@ typedef RandomGen<2,double> RandomGen2;
 typedef RandomGen<4,double> RandomGen4;
 typedef Kinodynamic::TreeInt2D TreeInt2D;
 typedef Kinodynamic::Connector Connector;
+typedef Kinodynamic::CollisionChecker CollisionChecker;
+typedef Kinodynamic::CollisionTimeSpaceChecker CollisionTimeSpaceChecker;
 typedef Kinodynamic::Sampler<Kinodynamic::StaticEnvironment> Sampler;
 typedef Kinodynamic::GoalChecker<Kinodynamic::StaticEnvironment> GoalChecker;
 typedef Robosoccer<> Environment;
@@ -57,6 +59,86 @@ TEST(TreeInt2D,insert)
     tree.insert(s, tree.tree.size()-1, e);
   }
   EXPECT_TRUE(ok);
+}
+
+TEST(CollisionChecker, collision) {
+  auto &checker = Kinodynamic::checker;
+  auto &connector = Kinodynamic::connector;
+  auto &sampler = Kinodynamic::sampler;
+  auto &env = Kinodynamic::robosoccer_env;
+
+  using state_t = decltype(sampler());
+  state_t s0, s1;
+
+  std::array<state_t,9> obs;
+  env.setObstacles(obs);
+
+  s0(0) = -5.0; s1(0) = 5.0;
+  s0(1) = 0.0; s1(1) = 0.0;
+  s0(2) = 0.0; s1(2) = 0.0;
+  s0(3) = 0.0; s1(3) = 0.0;
+  auto e = connector(s0, s1);
+  EXPECT_TRUE(checker(e)) << s0 << s1;
+}
+
+TEST(CollisionChecker, collision_free) {
+  auto &checker = Kinodynamic::checker;
+  auto &connector = Kinodynamic::connector;
+  auto &sampler = Kinodynamic::sampler;
+  auto &env = Kinodynamic::robosoccer_env;
+
+  using state_t = decltype(sampler());
+  state_t s0, s1;
+
+  std::array<state_t,9> obs;
+  env.setObstacles(obs);
+
+  s0(0) = -5.0; s1(0) = -5.0;
+  s0(1) = -5.0; s1(1) = 5.0;
+  s0(2) = 0.0; s1(2) = 0.0;
+  s0(3) = 0.0; s1(3) = 0.0;
+  auto e = connector(s0, s1);
+  EXPECT_FALSE(checker(e)) << s0 << s1;
+}
+
+TEST(CollisionTimeSpaceChecker, collision) {
+  auto &checker = Kinodynamic::checker;
+  auto &connector = Kinodynamic::connector;
+  auto &sampler = Kinodynamic::sampler;
+  auto &env = Kinodynamic::robosoccer_env;
+
+  using state_t = decltype(sampler());
+  state_t s0, s1;
+
+  std::array<state_t,9> obs;
+  env.setObstacles(obs);
+
+  s0(0) = -5.0; s1(0) = 5.0;
+  s0(1) = 0.0; s1(1) = 0.0;
+  s0(2) = 0.0; s1(2) = 0.0;
+  s0(3) = 0.0; s1(3) = 0.0;
+  auto e = connector(s0, s1);
+  EXPECT_TRUE(checker(e)) << s0 << s1;
+}
+
+TEST(CollisionTimeSpaceChecker, collision_free) {
+  auto &checker = Kinodynamic::checker_time_space;
+  auto &connector = Kinodynamic::connector;
+  auto &sampler = Kinodynamic::sampler_dynamic_env;
+  auto &env = Kinodynamic::dynamic_soccer_env;
+
+  using state_t = decltype(sampler());
+  state_t s0, s1;
+
+  std::array<state_t,9> obs;
+  env.setObstacles(obs);
+
+  s0(0) = -5.0; s1(0) = -5.0;
+  s0(1) = -5.0; s1(1) = 5.0;
+  s0(2) = 0.0; s1(2) = 0.0;
+  s0(3) = 0.0; s1(3) = 0.0;
+  auto e = connector(s0, s1);
+  EXPECT_FALSE(checker(e)) << s0 << s1;
 }
 
 using RRT = decltype(Kinodynamic::rrtstar_int2d_timespace_obs);
