@@ -20,6 +20,7 @@ struct State3D
   State3D() {}
   // State3D(Point3D *p, CostType *c) : p(p), c(c) {}
   State3D(std::shared_ptr<Point3D> p, std::shared_ptr<CostType> c) : p(p), c(c) {}
+  inline
   bool operator==(State3D &rhs) {
     auto same = true;
     for(size_t i=0; i<3; i++) {
@@ -27,6 +28,11 @@ struct State3D
       if(!same) break;
     }
     return same;
+  }
+  inline
+  bool operator!=(State3D &rhs) {
+    auto same = (*this)==rhs;
+    return !same;
   }
   std::shared_ptr<Point3D> p;
   std::shared_ptr<CostType> c;

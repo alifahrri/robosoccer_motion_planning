@@ -154,7 +154,7 @@ public:
     // check if the new state is the goal,
     // if you want an exact goal state, feed the xg
     auto is_goal = false;
-    if(xg && parent) {
+    if((xg && parent) && (*xg != xr)){
       auto c = cost(xr, *xg);
       auto xr_cost = tree(xr_idx).cost();
       if(goal_idx) { // goal has been previously found, modify

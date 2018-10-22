@@ -29,6 +29,11 @@ struct State2D
     }
     return same;
   }
+  inline
+  bool operator!=(State2D &rhs) {
+    auto same = (*this)==rhs;
+    return !same;
+  }
   std::shared_ptr<Point2D> p;
   std::shared_ptr<CostType> c;
   double operator()(size_t i) const {

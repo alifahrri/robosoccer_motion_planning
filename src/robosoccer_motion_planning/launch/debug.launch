@@ -1,0 +1,5 @@
+<launch>
+    <include file="$(find nubot_gazebo)/launch/game_setup.launch"/>
+    <include file="$(find robosoccer_teleop)/launch/teleop.launch"/>
+    <include file="$(find robosoccer_motion_planning)/launch/debug_core.launch"/>
+</launch>

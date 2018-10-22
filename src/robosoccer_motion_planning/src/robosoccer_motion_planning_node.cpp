@@ -34,6 +34,24 @@ int main(int argc, char **argv)
 
   auto &tree = Kinodynamic::tree_int2d;
 
+  // read parameter
+  bool ds_param;
+  double ds_prob;
+  int ts;
+  std::string env_param;
+  size_t target_size = 100;
+  Environment robo_env = Static;
+  bool direct_sampling_en = false;
+  double direct_sampling_prob = 0.5;
+  if(ros::param::get("environment", env_param))
+    robo_env = (env_param == std::string("dynamic") ? Dynamic : Static);
+  if(ros::param::get("direct_sampling", ds_param))
+    direct_sampling_en = ds_param;
+  if(ros::param::get("direct_sampling_prob", ds_prob))
+    direct_sampling_prob = ds_prob;
+  if(ros::param::get("target_size", ts))
+    target_size = ts;
+
   // generic lambdas :
   // set starting state for rrt given the subscriber
   auto set_start = [](auto &rrt, auto &subs) {
@@ -58,47 +76,33 @@ int main(int argc, char **argv)
     vis.clear();
   };
   // create helper lambda to run the rrt
-  auto solve_rrt = [set_start, set_obstacles, visualize, &vis](auto &rrt, auto &subs, auto &env, auto &tree, auto *xg, size_t iteration) {
+  auto vis_t0 = ros::Time::now();
+  auto vis_t1 = ros::Time::now();
+  auto solve_rrt = [set_start, set_obstacles, visualize, &vis, &vis_t0, &vis_t1]
+      (auto &rrt, auto &subs, auto &env, auto &tree, auto *xg, auto &sampler, size_t iteration)
+  {
     set_start(rrt, subs);
     set_obstacles(env, subs);
     auto solved = false;
     auto t0 = ros::Time::now();
     ROS_INFO("growing tree");
-    for(size_t i=0; i<iteration; i++)
+    auto ts = tree.tree.size();
+    for(size_t i=0; i<iteration; i++) {
       solved = rrt.grow(xg);
+      auto s = sampler.last_sample();
+      ROS_INFO("sample : %f, %f, %f, %f %s", s(0), s(1), s(2), s(3), (tree.tree.size() > ts ? "ok" : "failed"));
+      ts = tree.tree.size();
+    }
     auto t1 = ros::Time::now();
     auto dt = t1 - t0;
-    if(tree.tree.size() > 0) {
+    vis_t1 = t0;
+    auto vis_dt = vis_t1 - vis_t0;
+    if((tree.tree.size() > 0) && (vis_dt.toSec() > 0.066)) {
       visualize(rrt, tree, env, vis);
+      vis_t0 = vis_t1;
     }
     return std::make_pair(solved, dt.toSec());
   };
-
-  auto xg = goal.randomGoal();
-
-  bool ds_param;
-  double ds_prob;
-  int ts;
-  std::string env_param;
-  size_t target_size = 100;
-  Environment robo_env = Static;
-  bool direct_sampling_en = false;
-  double direct_sampling_prob = 0.5;
-  if(ros::param::get("environment", env_param))
-    robo_env = (env_param == std::string("dynamic") ? Dynamic : Static);
-  if(ros::param::get("direct_sampling", ds_param))
-    direct_sampling_en = ds_param;
-  if(ros::param::get("direct_sampling_prob", ds_prob))
-    direct_sampling_prob = ds_prob;
-  if(ros::param::get("target_size", ts))
-    target_size = ts;
-
-  if(direct_sampling_en) {
-    sampler.set_direct_sample(true, direct_sampling_prob);
-    sampler_dyn.set_direct_sample(true, direct_sampling_prob);
-    sampler.target = xg;
-    sampler_dyn.target = xg;
-  }
 
   // receive ros messsage in separate threads
   ros::AsyncSpinner spinner(1);
@@ -114,18 +118,36 @@ int main(int argc, char **argv)
   auto solved = false;
   auto time = 0.0;
 
+  while(subs.getObstacles().size() < 9) {
+    ROS_INFO("waiting for models to be spawned");
+    rate.sleep();
+  }
+
+  set_obstacles(env, subs);
+  set_obstacles(env_dyn, subs);
+
+  auto xg = goal.randomGoal();
+
+  if(direct_sampling_en) {
+    sampler.set_direct_sample(true, direct_sampling_prob);
+    sampler_dyn.set_direct_sample(true, direct_sampling_prob);
+    sampler.target = xg;
+    sampler_dyn.target = xg;
+    ROS_INFO("direct sampling enabled with prob : %f", sampler_dyn.direct_sampler->p[0]);
+  }
+
   while(ros::ok()) {
     switch(robo_env) {
     case Static :
     {
-      auto sol = solve_rrt(rrt, subs, env, tree, &xg, target_size);
+      auto sol = solve_rrt(rrt, subs, env, tree, &xg, sampler, target_size);
       solved = std::get<0>(sol);
       time = std::get<1>(sol);
       break;
     }
     case Dynamic :
     {
-      auto sol = solve_rrt(rrt_dyn, subs, env_dyn, tree, &xg, target_size);
+      auto sol = solve_rrt(rrt_dyn, subs, env_dyn, tree, &xg, sampler_dyn, target_size);
       solved = std::get<0>(sol);
       time = std::get<1>(sol);
       break;

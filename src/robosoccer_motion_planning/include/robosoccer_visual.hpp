@@ -36,7 +36,7 @@ auto call(RRT &rrt, Tree &tree, Env &env, RRTVisual &vis)
     }
     // draw 3d trajectory : xy pos (index 0,1) in xy-plane and time (index 4) as z-plane
     // with green color (0.0,1.0,0.0) and 0.1 opacity
-    vis.add_trajectories<3,0,1,4>(tree.trajectories,0.0,1.0,0.0,0.35,"_exploration");
+    vis.add_trajectories<3,0,1,4>(tree.trajectories,0.0,1.0,0.0,0.4,"_exploration");
     if(rrt.goalIndex() > 0) {
       auto goal = tree.get_trajectory(rrt.goalIndex());
       vis.add_trajectories<3,0,1,4>(goal,0.0,0.0,1.0,1.0,"_goal");

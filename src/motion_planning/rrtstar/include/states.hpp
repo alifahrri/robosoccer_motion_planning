@@ -10,8 +10,10 @@ struct State : public Eigen::Matrix<scalar,n,1>
 {
   static constexpr int dim = n;
   State() {}
-  State(const Eigen::Matrix<scalar,n,1> &m) {
-    *this = m;
+  State(const Eigen::Matrix<scalar,n,1> &m)
+    : Eigen::Matrix<scalar,n,1>(m)
+  {
+    // *this = m;
   }
   scalar cost() const { return c; }
   void setCost(const scalar &c) { this->c = c; }

@@ -116,7 +116,7 @@ struct RandomGen<dim,bool>
     return ret;
   }
 
-  std::array<bool,dim> p;
+  std::array<double,dim> p;
   std::mt19937_64 twister[dim];
   std::bernoulli_distribution *dist[dim];
 };
