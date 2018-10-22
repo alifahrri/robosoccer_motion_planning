@@ -536,7 +536,7 @@ struct Sampler
   state_t operator()()
   {
     if(!direct_sampling_enable) goto RANDOM_SAMPLE;
-    else if(*direct_sampler(0)) goto BIAS_SAMPLE;
+    else if((*direct_sampler)(0)) goto BIAS_SAMPLE;
     else goto RANDOM_SAMPLE;
 
     BIAS_SAMPLE :

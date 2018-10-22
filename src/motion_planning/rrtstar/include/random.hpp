@@ -90,7 +90,7 @@ struct RandomGen<dim,bool>
 
     for(size_t i=0; i<dim; i++) {
       twister[i] = std::mt19937_64(rd());
-      dist[i] = new std::uniform_real_distribution<>(p[i]);
+      dist[i] = new std::bernoulli_distribution(p[i]);
     }
   }
 
@@ -118,7 +118,7 @@ struct RandomGen<dim,bool>
 
   std::array<bool,dim> p;
   std::mt19937_64 twister[dim];
-  std::bernoulli_distribution<> *dist[dim];
+  std::bernoulli_distribution *dist[dim];
 };
 
 #endif // RANDOM_HPP

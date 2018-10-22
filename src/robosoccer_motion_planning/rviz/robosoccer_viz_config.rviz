@@ -6,7 +6,9 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
+        - /Grid1
         - /MarkerArray1
+        - /MarkerArray1/Namespaces1
       Splitter Ratio: 0.5
     Tree Height: 435
   - Class: rviz/Selection
@@ -46,7 +48,7 @@ Visualization Manager:
         Y: 0
         Z: 0
       Plane: XY
-      Plane Cell Count: 10
+      Plane Cell Count: 21
       Reference Frame: <Fixed Frame>
       Value: true
     - Class: rviz/MarkerArray
@@ -54,7 +56,13 @@ Visualization Manager:
       Marker Topic: /rrtvis_msgs
       Name: MarkerArray
       Namespaces:
-        {}
+        circles_obstacles: true
+        point_goal: true
+        point_start: true
+        points_exploration: false
+        points_goal: true
+        trajectory_exploration: true
+        trajectory_goal: true
       Queue Size: 100
       Value: true
   Enabled: true
@@ -82,25 +90,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/XYOrbit
-      Distance: 9.84755993
+      Distance: 18.1234131
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 1.05124593
-        Y: -2.86925268
-        Z: -4.76837158e-07
+        X: -10.3081198
+        Y: 0.982238352
+        Z: -1.31367597e-06
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.0500000007
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: 0.700398088
+      Pitch: 0.744796574
       Target Frame: <Fixed Frame>
       Value: XYOrbit (rviz)
-      Yaw: 5.06858444
+      Yaw: 3.09723806
     Saved: ~
 Window Geometry:
   Displays:
@@ -118,5 +126,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 1200
-  X: 60
+  X: 44
   Y: 24

@@ -63,8 +63,9 @@ int main(int argc, char **argv)
     set_obstacles(env, subs);
     auto solved = false;
     auto t0 = ros::Time::now();
+    ROS_INFO("growing tree");
     for(size_t i=0; i<iteration; i++)
-        solved = rrt.grow(xg);
+      solved = rrt.grow(xg);
     auto t1 = ros::Time::now();
     auto dt = t1 - t0;
     if(tree.tree.size() > 0) {
@@ -77,7 +78,9 @@ int main(int argc, char **argv)
 
   bool ds_param;
   double ds_prob;
+  int ts;
   std::string env_param;
+  size_t target_size = 100;
   Environment robo_env = Static;
   bool direct_sampling_en = false;
   double direct_sampling_prob = 0.5;
@@ -87,6 +90,8 @@ int main(int argc, char **argv)
     direct_sampling_en = ds_param;
   if(ros::param::get("direct_sampling_prob", ds_prob))
     direct_sampling_prob = ds_prob;
+  if(ros::param::get("target_size", ts))
+    target_size = ts;
 
   if(direct_sampling_en) {
     sampler.set_direct_sample(true, direct_sampling_prob);
@@ -106,7 +111,6 @@ int main(int argc, char **argv)
     rate.sleep();
   }
 
-  auto max_iter = 100;
   auto solved = false;
   auto time = 0.0;
 
@@ -114,14 +118,14 @@ int main(int argc, char **argv)
     switch(robo_env) {
     case Static :
     {
-      auto sol = solve_rrt(rrt, subs, env, tree, &xg, max_iter);
+      auto sol = solve_rrt(rrt, subs, env, tree, &xg, target_size);
       solved = std::get<0>(sol);
       time = std::get<1>(sol);
       break;
     }
     case Dynamic :
     {
-      auto sol = solve_rrt(rrt_dyn, subs, env_dyn, tree, &xg, max_iter);
+      auto sol = solve_rrt(rrt_dyn, subs, env_dyn, tree, &xg, target_size);
       solved = std::get<0>(sol);
       time = std::get<1>(sol);
       break;
