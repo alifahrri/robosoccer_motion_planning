@@ -28,17 +28,24 @@ using namespace std;
     // return the cost of the state respectively
     // TreeIndex represent tree index
     // Scalar represent cost
+
 template
 <
-    typename Tree, typename Cost, typename Sampler, typename NeighborRadius,
-    typename CollisionChecker, typename GoalChecker, typename Connector,
-    typename State = typename Tree::State,
-    typename Edge = typename Connector::Edge,
-    typename TreeIndex = typename Tree::Index,
-    typename Scalar = typename Cost::Scalar
+    typename Tree, typename Cost, typename Sampler, typename NeighborRadius
+    , typename CollisionChecker, typename GoalChecker, typename Connector
+    // , typename State = typename Tree::State
+    // , typename Edge = typename Connector::Edge
+    // , typename TreeIndex = typename Tree::Index
+    // , typename Scalar = typename Cost::Scalar
     >
 class RRTStar
 {
+public:
+  // deduce tree index type, cost type, and trajectory (edge) type
+  using State = std::decay_t<decltype(std::declval<Sampler>()())>;
+  using TreeIndex = std::decay_t<decltype(std::declval<Tree>().nearest(State(), std::declval<NeighborRadius>()(int())).at(0))>;
+  using Scalar = std::decay_t<decltype(std::declval<Cost>()(State(), State()))>;
+  using Edge = std::decay_t<decltype(std::declval<Connector>()(State(), State()))>;
 public:
   RRTStar(Tree &tree, Cost &cost, Sampler &sampler, CollisionChecker &checker, NeighborRadius &radius, GoalChecker &goal, Connector &connect) :
     tree(tree), cost(cost), sampler(sampler), collision(checker), radius(radius), goal(goal), connect(connect)
@@ -100,7 +107,18 @@ public:
       if(tree(*goal_idx) == xr)
         lowest_cost = new Scalar(tree(*goal_idx).cost());
 
+    TreeIndex xr_idx = -1;
+    auto already_inserted = false;
     for(const auto& n : nearest) {
+      // resolve multiple insertion of same state
+      if(tree(n) == xr) {
+        already_inserted = true;
+        if(!lowest_cost) lowest_cost = new Scalar(tree(n).cost());
+        else if(*lowest_cost > tree(n).cost()) *lowest_cost = tree(n).cost();
+        xr_idx = n;
+        continue;
+      }
+      // new fresh state
       auto e = connect(tree(n), xr);
       if(!collision(e)) {
         auto c = cost(tree(n),xr) + tree(n).cost();
@@ -121,13 +139,20 @@ public:
       }
     }
 
-    TreeIndex xr_idx = -1;
     if(parent) {
       // only insert the new node if it has parent
       // that also means that it is collision free
       auto xr_cost = cost(tree(*parent),xr) + tree(*parent).cost();
-      xr.setCost(xr_cost);
-      xr_idx = tree.insert(xr, *parent, edge);
+      if(already_inserted) {
+        // re-set parent
+        tree(xr_idx).setCost(xr_cost);
+        tree.setParent(xr_idx, *parent);
+        tree.setEdge(xr_idx, edge);
+      }
+      else {
+        xr.setCost(xr_cost);
+        xr_idx = tree.insert(xr, *parent, edge);
+      }
       // given neighboring states, check if the states could be reconnected to the
       // new state with lower cost (rewire)
       for(const auto &n : nearest) {

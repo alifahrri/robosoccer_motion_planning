@@ -45,13 +45,34 @@ int main(int argc, char** argv)
   auto vis_t0 = ros::Time::now();
   bool solved = false;
 
+  // read parameter
+  bool ds_param;
+  double ds_prob;
+  bool direct_sampling_en = false;
+  double direct_sampling_prob = 0.5;
+  if(ros::param::get("direct_sampling", ds_param))
+    direct_sampling_en = ds_param;
+  if(ros::param::get("direct_sampling_prob", ds_prob))
+    direct_sampling_prob = ds_prob;
+
+  if(direct_sampling_en) {
+    sampler.set_direct_sample(true, direct_sampling_prob);
+    sampler.target = xg;
+    ROS_INFO("direct sampling enabled with prob : %f", sampler.direct_sampler->p[0]);
+  }
+
+  auto ts = tree.tree.size();
   while(ros::ok()) {
     ROS_INFO("growing tree..");
     auto t0 = ros::Time::now();
     solved = rrt.grow(&xg);
     auto tree_size = tree.tree.size();
     auto t1 = ros::Time::now();
+    auto s = sampler.last_sample();
+    ROS_INFO("sample : (%f,%f,%f,%f) %s", s(0), s(1), s(2), s(3),
+             (tree_size > ts ? "OK" : "failed"));
     ROS_INFO("tree size : %d;", tree_size);
+    ts = tree_size;
 
     auto vis_t1 = ros::Time::now();
     auto dt = vis_t1-vis_t0;

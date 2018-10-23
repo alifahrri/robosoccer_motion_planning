@@ -432,7 +432,7 @@ TEST(TrajectorySolver, Solve)
        << time << ")"
        << std::endl;
     if(isnan(time) || isinf(time)) ok = false;
-    for(size_t i=0; i<=4; i++)
+    for(size_t i=0; i<4; i++)
       if(isnan(state(i)) || isinf(state(i)))
         ok = false;
   }
@@ -451,8 +451,8 @@ TEST(Integrator2DClosedExpm, exp)
     for(size_t j=0; j<4; j++) {
       for(size_t k=0; k<4; k++)
       {
-        ss << m(i,j) << (k!=3 ? " " : "; ");
-        if(isnan(m(i,j)) || isinf(m(i,j))) ok = false;
+        ss << m(j,k) << (k!=3 ? " " : "; ");
+        if(isnan(m(j,k)) || isinf(m(j,k))) ok = false;
       }
     }
     ss << "]" << std::endl;
@@ -473,8 +473,8 @@ TEST(Integrator2DSS, exp)
     for(size_t j=0; j<4; j++) {
       for(size_t k=0; k<4; k++)
       {
-        ss << m(i,j) << (k!=3 ? " " : "; ");
-        if(isnan(m(i,j)) || isinf(m(i,j))) ok = false;
+        ss << m(j,k) << (k!=3 ? " " : "; ");
+        if(isnan(m(j,k)) || isinf(m(j,k))) ok = false;
       }
     }
     ss << "]" << std::endl;
@@ -495,8 +495,8 @@ TEST(Integrator2DSSComposite, exp)
     for(size_t j=0; j<4; j++) {
       for(size_t k=0; k<4; k++)
       {
-        ss << m(i,j) << (k!=3 ? " " : "; ");
-        if(isnan(m(i,j)) || isinf(m(i,j))) ok = false;
+        ss << m(j,k) << (k!=3 ? " " : "; ");
+        if(isnan(m(j,k)) || isinf(m(j,k))) ok = false;
       }
     }
     ss << "]" << std::endl;
@@ -517,8 +517,8 @@ TEST(Integrator2DGramian, gram)
     for(size_t j=0; j<4; j++) {
       for(size_t k=0; k<4; k++)
       {
-        ss << m(i,j) << (k!=3 ? " " : "; ");
-        if(isnan(m(i,j)) || isinf(m(i,j))) ok = false;
+        ss << m(j,k) << (k!=3 ? " " : "; ");
+        if(isnan(m(j,k)) || isinf(m(j,k))) ok = false;
       }
     }
     ss << "]" << std::endl;
@@ -526,8 +526,8 @@ TEST(Integrator2DGramian, gram)
     for(size_t j=0; j<4; j++) {
       for(size_t k=0; k<4; k++)
       {
-        ss << m_inv(i,j) << (k!=3 ? " " : "; ");
-        if(isnan(m_inv(i,j)) || isinf(m_inv(i,j))) ok = false;
+        ss << m_inv(j,k) << (k!=3 ? " " : "; ");
+        if(isnan(m_inv(j,k)) || isinf(m_inv(j,k))) ok = false;
       }
     }
     ss << "]" << std::endl;
@@ -603,8 +603,8 @@ TEST(Integrator2DCmpClosedExpm, exp)
     for(size_t j=0; j<8; j++) {
       for(size_t k=0; k<8; k++)
       {
-        ss << m(i,j) << (k==7 ? " " : "; ");
-        if(isnan(m(i,j)) || isinf(m(i,j))) ok = false;
+        ss << m(j,k) << (k==7 ? " " : "; ");
+        if(isnan(m(j,k)) || isinf(m(j,k))) ok = false;
       }
     }
     ss << "]" << std::endl;

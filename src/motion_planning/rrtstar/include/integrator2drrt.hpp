@@ -535,24 +535,18 @@ struct Sampler
   inline
   state_t operator()()
   {
-    if(!direct_sampling_enable) goto RANDOM_SAMPLE;
-    else if((*direct_sampler)(0)) goto BIAS_SAMPLE;
-    else goto RANDOM_SAMPLE;
-
-    BIAS_SAMPLE :
-    s = target;
-    goto DONE;
-
-    RANDOM_SAMPLE :
-    (*rg)(s);
-    // for now dont compile this on cuda
-    // @TODO : fix
-#ifndef __NVCC__
-    while(env.collide(s))
+    if((direct_sampling_enable) && (*direct_sampler)(0)) {
+      s = target;
+    }
+    else {
       (*rg)(s);
-#endif
-
-    DONE :
+      // for now dont compile this on cuda
+      // @TODO : fix
+  #ifndef __NVCC__
+      while(env.collide(s))
+        (*rg)(s);
+  #endif
+    }
     return s;
   }
 
