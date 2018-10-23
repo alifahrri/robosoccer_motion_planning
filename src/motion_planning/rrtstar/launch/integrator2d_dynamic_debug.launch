@@ -1,6 +1,0 @@
-<launch>
-  <param name="direct_sampling" value="true"/>
-  <param name="direct_sampling_prob" value="0.1"/>
-  <node name="rrtstar_integrator2d_dynamic_test" pkg="rrtstar" type="rrtstar_integrator2d_dynamic_test" output="screen" launch-prefix="xterm -e gdb --args"/>
-  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find rrtstar)/rviz/int2d_config.rviz"/>
-</launch>
