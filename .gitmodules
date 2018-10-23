@@ -1,3 +1,6 @@
 [submodule "src/robosoccer_simulator"]
 	path = src/robosoccer_simulator
 	url = https://alifahrri@bitbucket.org/alifahrri/robosoccer_simulator.git
+[submodule "src/motion_planning"]
+	path = src/motion_planning
+	url = https://alifahrri@bitbucket.org/alifahrri/motion_planning.git
