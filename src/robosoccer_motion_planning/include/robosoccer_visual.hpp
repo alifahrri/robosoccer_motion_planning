@@ -10,7 +10,7 @@ inline
 auto call(RRT &rrt, Tree &tree, Env &env, RRTVisual &vis)
 {
   // c++17 stuff (compile-time if)
-  if constexpr(std::is_same<Env, decltype(Kinodynamic::robosoccer_env)>::value) {
+  if constexpr(std::is_same<Env, decltype(Kinodynamic::Wrapper::get_robosoccer_env())>::value) {
     ROS_INFO("adding visual..");
     auto r = env.collision_radius;
     for(const auto &o : env.obs)
@@ -23,7 +23,7 @@ auto call(RRT &rrt, Tree &tree, Env &env, RRTVisual &vis)
     }
     ROS_INFO("publish visual..");
   }
-  if constexpr(std::is_same<Env, decltype(Kinodynamic::dynamic_soccer_env)>::value) {
+  if constexpr(std::is_same<Env, decltype(Kinodynamic::Wrapper::get_dynamic_soccer_env())>::value) {
     ROS_INFO("adding visual (dynamic_env)..");
     double tf = 10.0;
     double delta = 0.2;

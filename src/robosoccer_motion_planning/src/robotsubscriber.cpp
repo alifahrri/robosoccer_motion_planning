@@ -77,11 +77,11 @@ void RobotSubscriber::callback(const nubot_common::OminiVisionInfo::ConstPtr &ms
       auto id = select_obs(pos, obs, ids);
       auto& near = obs.at(id);
       std::decay_t<decltype(obs.at(id))> p0 = obs.at(id);
-      get<0>(near) = pos.x;
-      get<1>(near) = pos.y;
-      // make velocity change smoothly
-      get<2>(near) = 0.8 * get<2>(near) + (1.0 - 0.8) * (get<0>(near) - get<0>(p0)) * f;
-      get<3>(near) = 0.8 * get<3>(near) + (1.0 - 0.8) * (get<1>(near) - get<1>(p0)) * f;
+      constexpr auto alpha = 0.97;
+      get<0>(near) = alpha * get<0>(near) + (1.0 - alpha) * pos.x;
+      get<1>(near) = alpha * get<1>(near) + (1.0 - alpha) * pos.y;
+      get<2>(near) = (get<0>(near) - get<0>(p0)) * f;
+      get<3>(near) = (get<1>(near) - get<1>(p0)) * f;
       ids.push_back(id);
     }
   }

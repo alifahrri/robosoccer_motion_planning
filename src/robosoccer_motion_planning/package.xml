@@ -49,6 +49,7 @@
   <!-- Use doc_depend for packages you need only for building documentation: -->
   <!--   <doc_depend>doxygen</doc_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>rrtstar</buildtool_depend>
   <build_depend>roscpp</build_depend>
   <build_depend>rrtstar</build_depend>
   <build_depend>nubot_common</build_depend>
@@ -57,6 +58,7 @@
   <build_export_depend>rrtstar</build_export_depend>
   <exec_depend>roscpp</exec_depend>
   <exec_depend>nubot_common</exec_depend>
+  <exec_depend>rrtstar</exec_depend>
 
 
   <!-- The export tag contains other, unspecified, tags -->

@@ -22,17 +22,17 @@ int main(int argc, char **argv)
 
   Models::init_integrator2d();
 
-  auto &rrt = Kinodynamic::rrtstar_int2d;
-  auto &env = Kinodynamic::robosoccer_env;
-  auto &goal = Kinodynamic::goal;
-  auto &sampler = Kinodynamic::sampler;
+  auto &rrt = Kinodynamic::Wrapper::get_rrtstar_int2d();
+  auto &env = Kinodynamic::Wrapper::get_robosoccer_env();
+  auto &goal = Kinodynamic::Wrapper::get_goal();
+  auto &sampler = Kinodynamic::Wrapper::get_sampler();
 
-  auto &rrt_dyn = Kinodynamic::rrtstar_int2d_timespace_obs;
-  auto &env_dyn = Kinodynamic::dynamic_soccer_env;
-  auto &goal_dyn = Kinodynamic::goal_dynamic_env;
-  auto &sampler_dyn = Kinodynamic::sampler_dynamic_env;
+  auto &rrt_dyn = Kinodynamic::Wrapper::get_rrtstar_int2d_timespace_obs();
+  auto &env_dyn = Kinodynamic::Wrapper::get_dynamic_soccer_env();
+  auto &goal_dyn = Kinodynamic::Wrapper::get_goal_dynamic_env();
+  auto &sampler_dyn = Kinodynamic::Wrapper::get_sampler_dynamic_env();
 
-  auto &tree = Kinodynamic::tree_int2d;
+  auto &tree = Kinodynamic::Wrapper::get_tree_int2d();
 
   // read parameter
   bool ds_param;

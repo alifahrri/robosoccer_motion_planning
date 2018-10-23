@@ -1,7 +1,7 @@
 <launch>
   <param name="target_size" value="50"/>
-<!--  <param name="environment" value="dynamic"/>-->
-  <param name="direct_sampling" value="false"/>
+  <param name="environment" value="dynamic"/>
+  <param name="direct_sampling" value="true"/>
   <param name="direct_sampling_prob" value="0.1"/>
   <node name="robosoccer_motion_planning_node" pkg="robosoccer_motion_planning" type="robosoccer_motion_planning_node" output="screen" required="true"/>
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(find robosoccer_motion_planning)/rviz/robosoccer_viz_config.rviz"/>

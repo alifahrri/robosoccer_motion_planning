@@ -15,8 +15,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
-find_package(catkin REQUIRED COMPONENTS nubot_common roscpp)
-find_package(rrtstar REQUIRED)
+find_package(catkin REQUIRED COMPONENTS rrtstar nubot_common roscpp)
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -109,9 +108,9 @@ find_package(rrtstar REQUIRED)
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
   INCLUDE_DIRS include
-  #  LIBRARIES robosoccer_motion_planning
-  #  CATKIN_DEPENDS other_catkin_pkg
-  DEPENDS rrtstar
+  LIBRARIES robosoccer_motion_planning
+  CATKIN_DEPENDS rrtstar roscpp
+#  DEPENDS rrtstar
   )
 
 ###########
