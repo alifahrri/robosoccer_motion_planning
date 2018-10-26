@@ -1,0 +1,3 @@
+<launch>
+    <node name="robosoccer_trajectory_vis" pkg="robosoccer_trajectory_tracking" type="trajectory_vis.py" output="screen"/>
+</launch>
