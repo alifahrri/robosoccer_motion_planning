@@ -9,6 +9,6 @@ if __name__ == '__main__' :
     app = QtWidgets.QApplication(sys.argv)
     teleop = gui.TeleopGUI()
     rospy.init_node('robosoccer_teleop')
-    teleop.widget.showMaximized()
+    teleop.showMaximized()
     app.exec_()
     sys.exit(0)

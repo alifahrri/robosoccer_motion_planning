@@ -1,6 +1,7 @@
 import velocitypublisher as velpub
 import robotsubscriber as robosub
 import teleopdialog as dialog
+import modelspawner as spawner
 import math
 import rospy
 from PyQt5 import QtWidgets, QtGui, QtCore
@@ -118,8 +119,22 @@ class MasterVelocity(QtWidgets.QGraphicsItem) :
     def boundingRect(self) :
         return QtCore.QRectF(-130,-130,260,260)
 
-class TeleopGUI(object) :
+class TeleopGUI(QtWidgets.QMainWindow) :
     def __init__(self, *args, **kwargs):
+        # main windown settings, include menut
+        QtWidgets.QMainWindow.__init__(self)
+        self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+        self.setWindowTitle("teleop main window")
+        self.file_menu = QtWidgets.QMenu('&File', self)
+        self.file_menu.addAction('&Quit', self.fileQuit,
+                                 QtCore.Qt.CTRL + QtCore.Qt.Key_Q)
+        self.menuBar().addMenu(self.file_menu)
+        self.view_menu = QtWidgets.QMenu('&View', self)
+        self.view_menu.addAction('&Spawn', self.spawn)
+        self.menuBar().addSeparator()
+        self.menuBar().addMenu(self.view_menu)
+
+        # central widget settings
         self.widget = QtWidgets.QWidget()
         self.ui = dialog.Ui_Dialog()
         self.ui.setupUi(self.widget)
@@ -128,17 +143,19 @@ class TeleopGUI(object) :
         self.bot_sub = []
         self.foe_sub = []
         self.master_vel = MasterVelocity()
+        self.lines_item = LinesItem()
+        ## scene settings
         self.scene = QtWidgets.QGraphicsScene(-200.0,-200.0,400,400,self.widget)
         self.scene.addItem(self.master_vel)
         self.ui.graphicsView.setScene(self.scene)
         self.ui.graphicsView.setRenderHint(QtGui.QPainter.Antialiasing)
         self.wp_scene = QtWidgets.QGraphicsScene(-900,-600,1800,1200)
-        self.lines_item = LinesItem()
         self.wp_scene.addItem(self.lines_item)
         self.ui.wp_graphicsView.setScene(self.wp_scene)
         self.ui.wp_graphicsView.setRenderHint(QtGui.QPainter.Antialiasing)
         FIELD_SCALE = 0.5
         self.ui.wp_graphicsView.scale(FIELD_SCALE, FIELD_SCALE)
+        ### some control widget settings
         keys = ['stop', 'master', 'circular', 'waypoint']
         for i in range(N_ROBOT) :
             bot_topic = '/nubot'+str(i+1)+'/nubotcontrol/velcmd'
@@ -166,14 +183,27 @@ class TeleopGUI(object) :
             self.ui.wp_comboBox.addItem('bot %s'%(i+1))
         for i in range(len(self.foe_sub)) :
             self.ui.wp_comboBox.addItem('foe %s'%(i+1))
+
+        ## set connection and timer (for rospy check)
         self.ui.wp_setBtn.clicked.connect(self.setWaypoints)
         self.ui.wp_clearBtn.clicked.connect(self.clearWaypoints)
         self.widget.setWindowTitle('Teleoperation')
+        self.setCentralWidget(self.widget)
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.update)
         self.timer.start(100)
-    
-    def update(self) :
+
+    def fileQuit(self):
+        self.close()
+
+    def closeEvent(self, ce):
+        self.fileQuit()
+
+    def spawn(self) :
+        dialog = spawner.SpawnerDialog(self)
+        dialog.show()
+
+    def control(self) :
         bot_config, foe_config = self.get_gui_config()
         mvx, mvy, w = self.get_master_vel()
         for i in range(N_ROBOT) :
@@ -194,9 +224,13 @@ class TeleopGUI(object) :
                     self.foe_sub[i].nextTarget()
             self.bot_velpub[i].publish()
             self.foe_velpub[i].publish()
+    
+    def update(self) :
+        self.control()
         self.wp_scene.update()
         if rospy.is_shutdown() :
             self.widget.close()
+            self.fileQuit()
 
     def setWaypoints(self) :
         i = self.ui.wp_comboBox.currentIndex()
