@@ -52,13 +52,16 @@
   <buildtool_depend>rrtstar</buildtool_depend>
   <build_depend>roscpp</build_depend>
   <build_depend>rrtstar</build_depend>
+  <build_depend>nav_msgs</build_depend>
   <build_depend>nubot_common</build_depend>
-  <build_export_depend>nubot_common</build_export_depend>
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>rrtstar</build_export_depend>
+  <build_export_depend>nubot_common</build_export_depend>
+  <build_export_depend>nav_msgs</build_export_depend>
   <exec_depend>roscpp</exec_depend>
-  <exec_depend>nubot_common</exec_depend>
   <exec_depend>rrtstar</exec_depend>
+  <exec_depend>nubot_common</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
 
 
   <!-- The export tag contains other, unspecified, tags -->
