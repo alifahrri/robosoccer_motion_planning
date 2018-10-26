@@ -31,7 +31,9 @@ void RobotSubscriber::callback(const nubot_common::OminiVisionInfo::ConstPtr &ms
       auto vy = msg->robotinfo.at(i).vtrans.y/100.0;
       get<0>(state) = px; get<1>(state) = py;
       get<2>(state) = vx; get<3>(state) = vy;
+      auto h = heading;
       heading = msg->robotinfo.at(i).heading.theta;
+      heading_rate = heading - h;
       // ROS_INFO("robot info(%f,%f,%f,%f)", px, py, vx, vy);
       break;
     }
@@ -77,6 +79,7 @@ void RobotSubscriber::callback(const nubot_common::OminiVisionInfo::ConstPtr &ms
       auto id = select_obs(pos, obs, ids);
       auto& near = obs.at(id);
       std::decay_t<decltype(obs.at(id))> p0 = obs.at(id);
+      // make it smooth
       constexpr auto alpha = 0.97;
       get<0>(near) = alpha * get<0>(near) + (1.0 - alpha) * pos.x;
       get<1>(near) = alpha * get<1>(near) + (1.0 - alpha) * pos.y;

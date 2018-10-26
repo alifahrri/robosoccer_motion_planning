@@ -44,6 +44,7 @@ public:
   size_t numPublishers() { return sub.getNumPublishers(); }
   const auto& getState() const { return state; }
   const auto& getObstacles() const { return obs; }
+  const auto getHeading() const { return std::make_pair(heading, heading_rate); }
 private:
   ros::Subscriber sub;
   std::vector<State> obs;
@@ -52,6 +53,7 @@ private:
   std::vector<std::vector<ros::Time>> time_history;
   State state;
   double heading;
+  double heading_rate;
   size_t id;
   size_t n_obstacles = 9;
   ros::Time last_recv;
