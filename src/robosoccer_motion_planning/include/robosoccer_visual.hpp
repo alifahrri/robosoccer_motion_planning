@@ -7,10 +7,10 @@
 
 template<typename RRT, typename Tree, typename Env>
 inline
-auto call(RRT &rrt, Tree &tree, Env &env, RRTVisual &vis)
+auto call_vis(RRT &rrt, Tree &tree, Env &env, RRTVisual &vis)
 {
   // c++17 stuff (compile-time if)
-  if constexpr(std::is_same<Env, decltype(Kinodynamic::Wrapper::get_robosoccer_env())>::value) {
+  if constexpr(std::is_same<Env, std::decay_t<decltype(Kinodynamic::Wrapper::get_robosoccer_env())>>::value) {
     ROS_INFO("adding visual..");
     auto r = env.collision_radius;
     for(const auto &o : env.obs)
@@ -23,7 +23,7 @@ auto call(RRT &rrt, Tree &tree, Env &env, RRTVisual &vis)
     }
     ROS_INFO("publish visual..");
   }
-  if constexpr(std::is_same<Env, decltype(Kinodynamic::Wrapper::get_dynamic_soccer_env())>::value) {
+  else if constexpr(std::is_same<Env, std::decay_t<decltype(Kinodynamic::Wrapper::get_dynamic_soccer_env())>>::value) {
     ROS_INFO("adding visual (dynamic_env)..");
     double tf = 10.0;
     double delta = 0.2;
@@ -39,7 +39,7 @@ auto call(RRT &rrt, Tree &tree, Env &env, RRTVisual &vis)
     vis.add_trajectories<3,0,1,4>(tree.trajectories,0.0,1.0,0.0,0.4,"_exploration");
     if(rrt.goalIndex() > 0) {
       auto goal = tree.get_trajectory(rrt.goalIndex());
-      vis.add_trajectories<3,0,1,4>(goal,0.0,0.0,1.0,1.0,"_goal");
+      vis.add_trajectories<3,0,1,4>(goal,0.0,0.0,1.0,1.0,"_goal",.05f,.075f);
     }
     auto xs = tree(0);
     auto xg = (rrt.goalIndex() > 0 ? tree(rrt.goalIndex()) : xs);
