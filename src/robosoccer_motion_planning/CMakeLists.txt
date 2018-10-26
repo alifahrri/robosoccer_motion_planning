@@ -15,10 +15,14 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
-find_package(catkin REQUIRED COMPONENTS rrtstar nubot_common roscpp)
+find_package(catkin REQUIRED COMPONENTS rrtstar nubot_common roscpp nav_msgs geometry_msgs)
 
 ## System dependencies are found with CMake's conventions
-# find_package(Boost REQUIRED COMPONENTS system)
+
+find_package(GTest REQUIRED)
+find_package(benchmark REQUIRED)
+include_directories(${GTEST_INCLUDE_DIRS})
+include_directories(${benchmark_INCLUDE_DIRS})
 
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -110,7 +114,7 @@ catkin_package(
   INCLUDE_DIRS include
   LIBRARIES robosoccer_motion_planning
   CATKIN_DEPENDS rrtstar roscpp
-#  DEPENDS rrtstar
+  DEPENDS rrtstar GTest
   )
 
 ###########
@@ -127,7 +131,10 @@ include_directories(
 
 ## Declare a C++ library
 add_library(${PROJECT_NAME}
+  src/goalsubscriber.cpp
   src/robotsubscriber.cpp
+  src/trajectorypublisher.cpp
+  src/trajectory1d.cpp
   include/robosoccer_visual.hpp
   )
 
@@ -201,10 +208,10 @@ target_link_libraries(${PROJECT_NAME}_node
 #############
 
 ## Add gtest based cpp test target and link libraries
-# catkin_add_gtest(${PROJECT_NAME}-test test/test_robosoccer_motion_planning.cpp)
-# if(TARGET ${PROJECT_NAME}-test)
-#   target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
-# endif()
+catkin_add_gtest(${PROJECT_NAME}-test test/unit_test.cpp)
+if(TARGET ${PROJECT_NAME}-test)
+  target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
+endif()
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
