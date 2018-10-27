@@ -1,9 +1,17 @@
 <launch>
+  <!--which agent should be controlled-->
   <param name="agent_id" value="1"/>
+  <!--  target size for growing rrt-->
   <param name="target_size" value="50"/>
+  <!--  visualisation rate-->
+  <!--  <param name="rrtvis_rate" value="6.0"/>-->
+  <!--  environment type, dynamic or static-->
   <param name="environment" value="dynamic"/>
+  <!--  enable or disable direct sampling to goal-->
   <param name="direct_sampling" value="true"/>
-  <param name="direct_sampling_prob" value="0.1"/>
+  <!--  probability of direct sampling-->
+  <param name="direct_sampling_prob" value="0.35"/>
+  <!--  topic name of goal, should be nav_msgs/goal-->
   <param name="goal_topic" value="move_base_simple/goal"/>
   <node name="robosoccer_motion_planning_node" pkg="robosoccer_motion_planning" type="robosoccer_motion_planning_node" output="screen" required="true"/>
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(find robosoccer_motion_planning)/rviz/robosoccer_viz_config.rviz"/>
