@@ -16,6 +16,7 @@ public:
   void setGoal(auto &pose);
   void getGoal(auto &position);
   auto getGoal();
+  auto getYaw();
 private:
   void set_time(auto &var);
   void callback(const geometry_msgs::PoseStampedConstPtr &msg);
@@ -40,6 +41,14 @@ auto GoalSubscriber::getGoal()
 {
   tf::Quaternion q;
   tf::quaternionMsgToTF(goal.pose.orientation, q);
+  return std::make_tuple(goal.pose.position.x, goal.pose.position.y, tf::getYaw(q));
+}
+
+auto GoalSubscriber::getYaw()
+{
+  tf::Quaternion q;
+  tf::quaternionMsgToTF(goal.pose.orientation, q);
+  return tf::getYaw(q);
 }
 
 #endif // GOALSUBSCRIBER_H
