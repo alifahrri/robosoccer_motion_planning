@@ -61,9 +61,11 @@ int main(int argc, char **argv)
   Trajectory1D::AngleController angular_trajectory;
   angular_trajectory.setLimit(0.5, 0.5);
 
+  int ts;
   bool ds_param;
   double ds_prob;
-  int ts;
+  double vr_param;
+  double vis_rate = 7.0;
   std::string env_param;
   size_t target_size = 100;
   Environment robo_env = Static;
@@ -78,11 +80,17 @@ int main(int argc, char **argv)
     direct_sampling_prob = ds_prob;
   if(ros::param::get("target_size", ts))
     target_size = ts;
+  if(ros::param::get("rrtvis_rate", vr_param))
+    vis_rate = vr_param;
 
   // generic lambdas :
   // set starting state for rrt given the subscriber
-  auto set_start = [](auto &rrt, auto &subs) {
+  std::decay_t<decltype(subs.getHeading())> ws;
+  // we capture ws here to make sure that pose that used for rrt and
+  // angle trajectory generator is received at the same time point
+  auto set_start = [&ws](auto &rrt, auto &subs) {
     auto s = subs.getState();
+    ws = subs.getHeading();
     Kinodynamic::TreeInt2D::State xs;
     xs(0) = s(0); xs(1) = s(1);
     xs(2) = s(2); xs(3) = s(3);
@@ -102,14 +110,15 @@ int main(int argc, char **argv)
     vis.publish();
     vis.clear();
   };
-  auto set_goal = [&goal_subs](auto &goal)
+  auto set_goal = [&goal_subs](auto &goal, auto &yaw)
   {
+    yaw = goal_subs.getYaw();
     goal_subs.getGoal(goal);
   };
   // create helper lambda to run the rrt
   auto vis_t0 = ros::Time::now();
   auto vis_t1 = ros::Time::now();
-  auto solve_rrt = [set_start, set_obstacles, visualize, &vis, &vis_t0, &vis_t1]
+  auto solve_rrt = [set_start, set_obstacles, visualize, &vis, &vis_t0, &vis_t1, &vis_rate]
       (auto &rrt, auto &subs, auto &env, auto &tree, auto *xg, auto &sampler, size_t iteration)
   {
     set_start(rrt, subs);
@@ -128,7 +137,8 @@ int main(int argc, char **argv)
     auto dt = t1 - t0;
     vis_t1 = t0;
     auto vis_dt = vis_t1 - vis_t0;
-    if((tree.tree.size() > 0) && (vis_dt.toSec() > 0.066)) {
+    // visualize tree on certain rate
+    if((tree.tree.size() > 0) && (vis_dt.toSec() > (1./vis_rate))) {
       visualize(rrt, tree, env, vis);
       vis_t0 = vis_t1;
     }
@@ -173,9 +183,16 @@ int main(int argc, char **argv)
   while(ros::ok()) {
     // declare trajectory, the type is automatically deduced
     decltype(tree.get_trajectory(0)) trajectory;
+    // save current time to be used for trajectory publisher
     auto rrt_t0 = ros::Time::now();
     // set goal based on subscribed topic
-    set_goal(xg);
+    auto yaw = 0.0;
+    set_goal(xg, yaw);
+    // we should update target for sampler too!
+    if(direct_sampling_en) {
+      sampler.target = xg;
+      sampler_dyn.target = xg;
+    }
     switch(robo_env) {
     case Static :
     {
@@ -207,9 +224,9 @@ int main(int argc, char **argv)
       using Array = std::array<decltype(std::declval<State>()(0)),2>;
 
       // solve angular trajectory
-      auto ws = subs.getHeading();
       auto wt = 0.0;
-      auto ctrl = angular_trajectory.angleControl({std::get<0>(ws), std::get<1>(ws)}, 0.0f, wt);
+      ROS_INFO("solving angular trajectory : (%f,%f) -> (%f,0.0)", std::get<0>(ws), std::get<1>(ws), yaw);
+      auto ctrl = angular_trajectory.angleControl({std::get<0>(ws), std::get<1>(ws)}, yaw, wt);
       // create vector to hold time
       // we need this to match time index of int2d and angular trj1d
       std::vector<std::decay_t<decltype(trj.front()(4))>> time_vec;
