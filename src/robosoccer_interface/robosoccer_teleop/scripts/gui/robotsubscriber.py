@@ -1,8 +1,8 @@
+from PyQt5 import QtWidgets, QtGui, QtCore
 import rospy
 import math
 import copy
 import nubot_common.msg as msg
-from PyQt5 import QtWidgets, QtGui, QtCore
 
 class RobotSubscriber(object) :
     def __init__(self, topic, id, *args, **kwargs):
