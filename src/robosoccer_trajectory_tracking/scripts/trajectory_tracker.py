@@ -40,33 +40,52 @@ class PITracker(RobotSubscriber) :
         }
         rospy.logwarn('READY')
 
+    def compute_pi_from_char_poly(self, poly) :
+        pass
+
     def compute_error(self, time) :
         sub = self.sub
         idx = 0
         l = len(sub['pos'].t)
         # if ref is empty we can't do anything
         if l < 1 : return False
+        pos, vel = sub['pos'], sub['vel']
         # if indexed time behid reference, take first element
         # if beyond last ref, take the last
         # iterate if in between
+        rx = (pos.x[0], pos.x[0])
+        ry = (pos.y[0], pos.y[0])
+        rw = (pos.w[0], pos.w[0])
+        rvx = (vel.x[0], vel.x[0])
+        rvy = (vel.y[0], vel.y[0])
+        rvw = (vel.w[0], vel.w[0])
         if time < sub['pos'].t[0] : idx = 0
-        elif time > sub['pos'].t[-1] : idx = l-1 
+        elif time > sub['pos'].t[-1] : 
+            idx = l-1 
+            rx = (pos.x[idx], pos.x[idx])
+            ry = (pos.y[idx], pos.y[idx])
+            rw = (pos.w[idx], pos.w[idx])
+            rvx = (vel.x[idx], vel.x[idx])
+            rvy = (vel.y[idx], vel.y[idx])
+            rvw = (vel.w[idx], vel.w[idx])
         else :
             for i in range(l) :
                 if i == 0 : continue
-                idx = i
+                t = (sub['pos'].t[i], sub['pos'].t[i-1])
+                if (time > t[0]) and (time < t[1]) :
+                    idx = i
+                    # get reference
+                    rx = (pos.x[i], pos.x[i-1])
+                    ry = (pos.y[i], pos.y[i-1])
+                    rw = (pos.w[i], pos.w[i-1])
+                    rvx = (vel.x[i], vel.x[i-1])
+                    rvy = (vel.y[i], vel.y[i-1])
+                    rvw = (vel.w[i], vel.w[i-1])
+                    break
         i = idx
         t = (sub['pos'].t[i], sub['pos'].t[i-1])
         if (time > t[0]) and (time < t[1]) :
             dt = time - t[0]
-            # get reference
-            pos, vel = sub['pos'], sub['vel']
-            rx = (pos.x[i], pos.x[i-1])
-            ry = (pos.y[i], pos.y[i-1])
-            rw = (pos.w[i], pos.w[i-1])
-            rvx = (vel.x[i], vel.x[i-1])
-            rvy = (vel.y[i], vel.y[i-1])
-            rvw = (vel.w[i], vel.w[i-1])
             # compute error
             ## get computed error
             sum, ex = self.error['sum'], self.error['x']
@@ -86,8 +105,9 @@ class PITracker(RobotSubscriber) :
         return False
 
     def compute_control(self) :
-        for k in self.control.keys() :
-            self.control[k] = self.pid['p'] * self.error[k] + self.pid['i'] * self.error['sum'][k]
+        control, pid, error = self.control, self.pid, self.error
+        for k in set(control.keys()).intersection(error.keys()) :
+            control[k] = control['com'][k] + pid['p'] * error[k] + pid['i'] * error['sum'][k]
 
     def publish(self) :
         e = self.error
