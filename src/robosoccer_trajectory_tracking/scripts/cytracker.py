@@ -39,12 +39,12 @@ class PITracker(RobotSubscriber) :
         self.pid = {
             # some tuning parameter
             'p' : np.diag([1., 1., 1.]), 
-            'i' : np.diag([.2, .2, .2])
+            'i' : np.diag([.05, .05, .05])
         }
         # characteristic polynomial for computing gain
         self.char_poly = {
-            'p' : [1., 1., 1.], 
-            'i' : [.2, .2, .2]
+            'p' : [.7, .7, .7], 
+            'i' : [.05, .05, .05]
         }
         # command (or reference if you like)
         self.command = {
