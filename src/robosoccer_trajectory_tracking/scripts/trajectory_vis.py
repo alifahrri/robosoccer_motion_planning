@@ -84,54 +84,6 @@ class MyMplCanvas(FigureCanvas):
     def compute_initial_figure(self):
         pass
 
-class RobotTrajectoryCanvas(MyMplCanvas) :
-  def __init__(self, robot_sub, *args, **kwargs) :
-    self.type = 'pos'
-    if 'type' in kwargs :
-      self.type = kwargs['type']
-      kwargs.pop('type')
-    MyMplCanvas.__init__(self, *args, **kwargs)
-    self.sub = robot_sub
-    self.y, self.x, self.w, self.t = [], [], [], []
-
-  def update_figure(self) :
-    if not (self.sub.header is None) :
-      if self.type == 'vel' :
-        self.t.append(self.sub.header.stamp.to_sec())
-        self.x.append(self.sub.vel[0])
-        self.y.append(self.sub.vel[1])
-        self.w.append(self.sub.vel[2])
-      else :
-        self.t.append(self.sub.header.stamp.to_sec())
-        self.x.append(self.sub.pos[0])
-        self.y.append(self.sub.pos[1])
-        self.w.append(self.sub.pos[2])
-      self.axes.cla()
-      t, w, x, y = self.t, self.w, self.x, self.y
-      self.axes.plot(t, x)
-      self.axes.plot(t, y)
-      self.axes.plot(t, w)
-      self.draw()
-      if len(self.t) > 1000 :
-        self.t = self.t[100:]
-        self.w = self.w[100:]
-        self.x = self.x[100:]
-        self.y = self.y[100:]
-
-class NavTrajectoryCanvas(MyMplCanvas) :
-  def __init__(self, subscriber, *args, **kwargs) :
-    self.topic = 'robosoccer_trajectory_pos'
-    MyMplCanvas.__init__(self, *args, **kwargs)
-    self.time = rospy.get_rostime()
-    self.subs = subscriber
-
-  def update_figure(self) :
-    self.axes.cla()
-    self.axes.plot(self.subs.t, self.subs.x)
-    self.axes.plot(self.subs.t, self.subs.y)
-    self.axes.plot(self.subs.t, self.subs.w)
-    self.draw()
-
 class ApplicationWindow(QtWidgets.QMainWindow):
     def __init__(self):
         QtWidgets.QMainWindow.__init__(self)
