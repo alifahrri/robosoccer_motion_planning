@@ -1,3 +1,6 @@
 <launch>
-    <node name="robosoccer_trajectory_tracking" pkg="robosoccer_trajectory_tracking" type="trajectory_tracker.py" output="screen" required="true"/>
+    <!-- pure python -->
+    <!-- <node name="robosoccer_trajectory_tracking" pkg="robosoccer_trajectory_tracking" type="trajectory_tracker.py" output="screen" required="true"/> -->
+    <!-- cython + python -->
+    <node name="robosoccer_trajectory_tracking" pkg="robosoccer_trajectory_tracking" type="trajectory_cytracker.py" output="screen" required="true"/>
 </launch>
