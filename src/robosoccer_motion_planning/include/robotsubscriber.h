@@ -5,6 +5,7 @@
 #include <vector>
 #include <ros/ros.h>
 #include <nubot_common/OminiVisionInfo.h>
+#include <tf/transform_broadcaster.h>
 
 class RobotSubscriber
 {
@@ -42,10 +43,15 @@ public:
   RobotSubscriber(ros::NodeHandle &node, size_t robot_id, TEAM team);
   void callback(const nubot_common::OminiVisionInfo::ConstPtr &msg);
   size_t numPublishers() { return sub.getNumPublishers(); }
+  void publishTF();
   const auto& getState() const { return state; }
   const auto& getObstacles() const { return obs; }
   const auto getHeading() const { return std::make_pair(heading, heading_rate); }
+  const auto& getTF() const { return transform; }
+  const auto& getName() const { return tf_name; }
 private:
+  tf::Transform transform;
+  tf::TransformBroadcaster tf_broadcaster;
   ros::Subscriber sub;
   std::vector<State> obs;
   std::vector<State> obs_p0;
@@ -59,6 +65,7 @@ private:
   ros::Time last_recv;
   ros::Time vel_time;
   double f;
+  std::string tf_name;
 };
 
 #endif // ROBOTSUBSCRIBER_H

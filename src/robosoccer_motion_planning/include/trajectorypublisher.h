@@ -2,18 +2,23 @@
 #define TRAJECTORYPUBLISHER_H
 
 #include <tf2/LinearMath/Quaternion.h>
+#include <tf/transform_broadcaster.h>
 #include <tf/transform_datatypes.h>
 #include <nav_msgs/Path.h>
 #include <ros/ros.h>
 #include "trajectoryhelper.hpp"
+#include "elements.hpp"
 
 class TrajectoryPublisher
 {
 public:
-  TrajectoryPublisher(ros::NodeHandle &node, std::string pos_topic, std::string vel_topic);
+  TrajectoryPublisher(ros::NodeHandle &node, std::string pos_topic, std::string vel_topic, std::string vel_frame = std::string("map"), std::string frame = std::string("map"), std::string name = std::string("trajectory_tf"));
+  // this would set the nav_msgs
   auto set(const auto &array_like, auto &get_time, auto &get_pos, auto &get_vel);
-  auto set_pose2d(const auto &array_like, auto &get_time, auto &get_pos, auto &get_vel, auto &angle_closure);
   auto set(const auto &pos_array, const auto &vel_array, auto &get_time, auto &get_pos, auto &get_vel);
+  auto set_pose2d(const auto &array_like, auto &get_time, auto &get_pos, auto &get_vel, auto &angle_closure);
+  // this will set transform
+  auto set_initial(const auto &origin, const auto &yaw);
   void publish();
 private:
   inline void reset();
@@ -22,6 +27,14 @@ private:
   ros::Publisher vpub;
   nav_msgs::Path pos;
   nav_msgs::Path vel;
+  // a name for transform broadcaster
+  std::string tf_name;
+  // frame name for nav_msgs
+  std::string vel_frame;
+  std::string pos_frame;
+  ros::Time tf_stamp;
+  tf::Transform transform;
+  tf::TransformBroadcaster tf_broadcaster;
 };
 
 // this version also set angle value
@@ -46,6 +59,15 @@ auto TrajectoryPublisher::set_pose2d(const auto &array_like, auto &get_time, aut
     p.pose.orientation = quat;
     v.pose.orientation = quat_rate;
   }
+}
+
+auto TrajectoryPublisher::set_initial(const auto &origin, const auto &yaw)
+{
+  tf_stamp = ros::Time::now();
+  transform.setOrigin(tf::Vector3(x(origin), y(origin), 0.0));
+  tf::Quaternion q;
+  q.setRPY(.0,.0,yaw);
+  transform.setRotation(q);
 }
 
 // set pos and vel path message
@@ -98,8 +120,8 @@ auto TrajectoryPublisher::set(const auto &pos_array, const auto &vel_array, auto
 
 void TrajectoryPublisher::reset()
 {
-  vel.header.frame_id = "/map";
-  pos.header.frame_id = "/map";
+  vel.header.frame_id = vel_frame;
+  pos.header.frame_id = pos_frame;
   vel.header.seq++;
   pos.header.seq++;
   vel.header.stamp = ros::Time::now();

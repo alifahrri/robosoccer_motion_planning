@@ -36,7 +36,7 @@ int main(int argc, char **argv)
   // create publisher for computed trajectory
   // create goal subscriber
   auto subs = RobotSubscriber(node, agent_id, RobotSubscriber::NUBOT);
-  auto pubs = TrajectoryPublisher(node, "robosoccer_trajectory_pos", "robosoccer_trajectory_vel");
+  auto pubs = TrajectoryPublisher(node, "robosoccer_trajectory_pos", "robosoccer_trajectory_vel", subs.getName());
   auto goal_subs = GoalSubscriber(node, goal_topic);
 
   // actually this is no longer needed
@@ -88,9 +88,10 @@ int main(int argc, char **argv)
   std::decay_t<decltype(subs.getHeading())> ws;
   // we capture ws here to make sure that pose that used for rrt and
   // angle trajectory generator is received at the same time point
-  auto set_start = [&ws](auto &rrt, auto &subs) {
+  auto set_start = [&ws, &pubs](auto &rrt, auto &subs) {
     auto s = subs.getState();
     ws = subs.getHeading();
+    pubs.set_initial(s, ws.first);
     Kinodynamic::TreeInt2D::State xs;
     xs(0) = s(0); xs(1) = s(1);
     xs(2) = s(2); xs(3) = s(3);

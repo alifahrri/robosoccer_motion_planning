@@ -9,9 +9,11 @@ RobotSubscriber::RobotSubscriber(ros::NodeHandle &node, size_t robot_id, TEAM te
   switch (team) {
   case NUBOT:
     topic_name = string("/nubot") + to_string(id) + "/omnivision/OmniVisionInfo";
+    tf_name = string("nubot") + to_string(id) + "_tf";
     break;
   case RIVAL:
     topic_name = string("/rival") + to_string(id) + "/omnivision/OmniVisionInfo";
+    tf_name = string("rival") + to_string(id) + "_tf";
     break;
   default:
     break;
@@ -42,7 +44,7 @@ void RobotSubscriber::callback(const nubot_common::OminiVisionInfo::ConstPtr &ms
   // select nearest obs, returning index
   auto select_obs = [](auto &pos, auto &obs, auto &exclude) {
     auto id = 0;
-    auto dis = 1e3;
+    auto dis = 1e5;
     for(size_t i=0; i<obs.size(); i++) {
       auto o = obs.at(i);
       auto d = hypot(pos.x-get<0>(o), pos.y-get<1>(o));
@@ -63,6 +65,7 @@ void RobotSubscriber::callback(const nubot_common::OminiVisionInfo::ConstPtr &ms
   f = (isnan(nf) || isinf(nf) ? f : nf);
   auto osize = msg->obstacleinfo.pos.size();
   std::vector<size_t> ids;
+  std::vector<size_t> o_ids;
   for(size_t i=0; i<osize; i++) {
     State o;
     auto pos = msg->obstacleinfo.pos.at(i);
@@ -86,10 +89,25 @@ void RobotSubscriber::callback(const nubot_common::OminiVisionInfo::ConstPtr &ms
       get<2>(near) = (get<0>(near) - get<0>(p0)) * f;
       get<3>(near) = (get<1>(near) - get<1>(p0)) * f;
       ids.push_back(id);
+      o_ids.push_back(i);
     }
+  }
+  if(ids.size() > 0) {
+
   }
   last_recv = time;
   //  ROS_INFO("f : %f", f);
   //  for(auto o : obs)
   //    ROS_INFO("(%f,%f,%f,%f)", o(0), o(1), o(2), o(3));
+  // publish tf
+  this->publishTF();
+}
+
+void RobotSubscriber::publishTF()
+{
+  transform.setOrigin(tf::Vector3(get<0>(state), get<1>(state), 0.0));
+  tf::Quaternion q;
+  q.setRPY(0.0,0.0,heading);
+  transform.setRotation(q);
+  tf_broadcaster.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "map", tf_name));
 }

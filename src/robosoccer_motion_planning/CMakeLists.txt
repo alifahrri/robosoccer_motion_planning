@@ -15,7 +15,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
-find_package(catkin REQUIRED COMPONENTS rrtstar nubot_common roscpp nav_msgs geometry_msgs)
+find_package(catkin REQUIRED COMPONENTS rrtstar nubot_common roscpp nav_msgs geometry_msgs tf)
 
 ## System dependencies are found with CMake's conventions
 
