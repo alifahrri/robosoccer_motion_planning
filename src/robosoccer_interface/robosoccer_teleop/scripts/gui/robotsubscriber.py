@@ -47,10 +47,10 @@ class RobotItem(QtWidgets.QGraphicsItem) :
         ret = None
         if not (self.subscriber.pos is None) :
             pos = self.subscriber.pos
+            w = pos[2]
             if self.flip < 0 :
-                ret = (self.flip*pos[0], pos[1], pos[2]-math.radians(180.0))
-            else :
-                ret = (pos[0], -self.flip*pos[1], pos[2])
+                w = w + math.pi if w < 0 else w - math.pi
+            ret = (self.flip*pos[0], -self.flip*pos[1], w)
         return ret
 
     def paint(self, painter, option, style) :
