@@ -2,4 +2,9 @@
     <!-- for testing -->
     <!-- <node name="robosoccer_teleop" pkg="robosoccer_teleop" type="robosoccer_teleop_node.py" output="screen"/> -->
     <node name="robosoccer_teleop" pkg="robosoccer_teleop" type="robosoccer_teleop_node.py"/>
+    <!-- run joystick node -->
+    <!-- we need to rename joy message because nubot use joy msg to move the ball -->
+    <node pkg="joy" type="joy_node" name="joystick_node" >
+        <remap from="joy" to="joystick"/>
+    </node>
 </launch>

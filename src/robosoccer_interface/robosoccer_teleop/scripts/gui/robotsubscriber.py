@@ -2,7 +2,30 @@ from PyQt5 import QtWidgets, QtGui, QtCore
 import rospy
 import math
 import copy
+import sensor_msgs.msg as sensormsg
 import nubot_common.msg as msg
+
+class JoySubscriber() :
+    def __init__(self, *args, **kwargs):
+        topic = '/joystick'
+        self.sub = rospy.Subscriber(topic,sensormsg.Joy,callback=self.callback)
+        self.speed = {
+            'trans' : {
+                'x' : .0, 'y' : .0
+            },
+            'rot' : .0
+        }
+    
+    def callback(self, msg) :
+        axes = msg.axes
+        btn = msg.buttons
+        self.speed = {
+            'trans' : {
+                'x' : axes[1] * 100.0,
+                'y' : axes[0] * 100.0
+            },
+            'rot' : btn[4] * .35 + btn[5] * (-.35) + btn[6] * .75 + btn[7] * (-.75)
+        }
 
 class RobotSubscriber(object) :
     def __init__(self, topic, id, *args, **kwargs):
@@ -28,6 +51,7 @@ class RobotItem(QtWidgets.QGraphicsItem) :
 
     def setWaypoints(self, wp) :
         del self.waypoints[:]
+        self.wp_target = 0
         if not (wp is None) :
             self.waypoints = list(wp)
 

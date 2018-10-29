@@ -145,6 +145,7 @@ class TeleopGUI(QtWidgets.QMainWindow) :
         self.bot_velpub, self.foe_velpub = [], []
         self.bot_sub, self.foe_sub = [], []
         self.master_vel = MasterVelocity()
+
         self.lines_item = LinesItem()
         ## scene settings
         self.scene = QtWidgets.QGraphicsScene(-200.0,-200.0,400,400,self.widget)
@@ -167,7 +168,7 @@ class TeleopGUI(QtWidgets.QMainWindow) :
         self.set_boxes()
 
         ### some control widget settings
-        keys = ['stop', 'master', 'circular', 'waypoint']
+        keys = ['stop', 'joy', 'master', 'circular', 'waypoint']
         for i in range(N_ROBOT) :
             bot_topic = '/nubot'+str(i+1)+'/nubotcontrol/velcmd'
             foe_topic = '/rival'+str(i+1)+'/nubotcontrol/velcmd'
@@ -188,6 +189,9 @@ class TeleopGUI(QtWidgets.QMainWindow) :
             self.ui.wp_comboBox.addItem('bot %s'%(i+1))
         for i in range(len(self.foe_sub)) :
             self.ui.wp_comboBox.addItem('foe %s'%(i+1))
+
+        # create joystick subscriber
+        self.joy_sub = robosub.JoySubscriber()
 
         ## set connection and timer (for rospy check)
         self.ui.save_btn.clicked.connect(self.save_yaml)
@@ -213,14 +217,15 @@ class TeleopGUI(QtWidgets.QMainWindow) :
 
     def control(self) :
         bot_config, foe_config = self.get_gui_config()
-        mvx, mvy, w = self.get_master_vel()
+        mvx, mvy, mw = self.get_master_vel()
+        jvx, jvy, jw = self.get_joy_vel()
         for i in range(N_ROBOT) :
             enabled = (bot_config[0][i], foe_config[0][i])
             key = (bot_config[1][i], foe_config[1][i])
             vm = (bot_config[2][i], foe_config[2][i])
             angle_rate = (bot_config[3][i], foe_config[3][i])
-            self.bot_velpub[i].update(enabled[0], key=key[0], vmax=vm[0], angle_rate=angle_rate[0], vx=mvx, vy=mvy, w=w)
-            self.foe_velpub[i].update(enabled[1], key=key[1], vmax=vm[1], angle_rate=angle_rate[1], vx=mvx, vy=mvy, w=w)
+            self.bot_velpub[i].update(enabled[0], key=key[0], vmax=vm[0], angle_rate=angle_rate[0], vx=mvx, vy=mvy, w=mw, jvx=jvx, jvy=jvy, jw=jw)
+            self.foe_velpub[i].update(enabled[1], key=key[1], vmax=vm[1], angle_rate=angle_rate[1], vx=mvx, vy=mvy, w=mw, jvx=jvx, jvy=jvy, jw=jw)
             bot_err = self.bot_velpub[i].pidControl(self.bot_sub[i].target(), self.bot_sub[i].pose())
             foe_err = self.foe_velpub[i].pidControl(self.foe_sub[i].target(), self.foe_sub[i].pose())
             MIN_ERROR = 10.0
@@ -300,6 +305,10 @@ class TeleopGUI(QtWidgets.QMainWindow) :
 
     def get_master_vel(self) :
         return self.master_vel.vx, self.master_vel.vy, self.master_vel.w
+
+    def get_joy_vel(self) :
+        speed = self.joy_sub.speed
+        return speed['trans']['x'], speed['trans']['y'], speed['rot']
 
     def set_boxes(self) :
         self.combo_box = {

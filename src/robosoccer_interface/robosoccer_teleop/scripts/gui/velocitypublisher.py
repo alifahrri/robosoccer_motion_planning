@@ -82,11 +82,15 @@ class VelocityPublisher(object) :
         self.last_error = (error, dw)
         return self.last_error
 
-    def update(self, enabled, key='', vmax=1.0, angle_rate = 5.0, vx=0.0, vy=0.0, w=0.0) :
+    def update(self, enabled, key='', vmax=1.0, angle_rate = 5.0, vx=0.0, vy=0.0, w=0.0, jvx=0.0, jvy=0.0, jw=0.0) :
         self.enabled = enabled
         self.msg.Vx = vx
         self.msg.Vy = vy
         self.msg.w = w
+        if key == 'joy' :
+            self.msg.Vx = jvx
+            self.msg.Vy = jvy
+            self.msg.w = jw
         if self.key != key :
             self.last_target = None
             self.last_error = (0.0, 0.0)
