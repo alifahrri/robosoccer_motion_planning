@@ -4,6 +4,8 @@ import teleopdialog as dialog
 import modelspawner as spawner
 import math
 import rospy
+import sys
+import yaml
 from PyQt5 import QtWidgets, QtGui, QtCore
 
 N_ROBOT = 5
@@ -20,22 +22,22 @@ class LinesItem(QtWidgets.QGraphicsItem) :
         WIDTH = self.WIDTH
         HEIGHT = self.HEIGHT
         STEP = self.STEP
-        for i in range(WIDTH/STEP) :
+        for i in range(WIDTH/STEP+1) :
             line = QtCore.QLineF(i*STEP-WIDTH/2,-HEIGHT/2,i*STEP-WIDTH/2,HEIGHT/2)
             self.v_lines.append(line)
-        for i in range(HEIGHT/STEP) :
+        for i in range(HEIGHT/STEP+1) :
             line = QtCore.QLineF(-WIDTH/2,i*STEP-HEIGHT/2,WIDTH/2,i*STEP-HEIGHT/2)
             self.h_lines.append(line)
         
     def paint(self, painter, option, style) :
-        painter.setPen(QtCore.Qt.lightGray)
+        painter.setPen(QtCore.Qt.green)
         painter.setBrush(QtCore.Qt.NoBrush)
         painter.drawLines(self.v_lines)
         painter.drawLines(self.h_lines)
         for i in range(len(self.waypoints)) :
             p1 = self.waypoints[i]
-            painter.setPen(QtCore.Qt.black)
-            painter.setBrush(QtCore.Qt.black)
+            painter.setPen(QtCore.Qt.gray)
+            painter.setBrush(QtCore.Qt.gray)
             painter.drawEllipse(p1, 10.0, 10.0)
             if i > 0 :
                 p0 = self.waypoints[i-1]
@@ -138,10 +140,10 @@ class TeleopGUI(QtWidgets.QMainWindow) :
         self.widget = QtWidgets.QWidget()
         self.ui = dialog.Ui_Dialog()
         self.ui.setupUi(self.widget)
-        self.bot_velpub = []
-        self.foe_velpub = []
-        self.bot_sub = []
-        self.foe_sub = []
+        self.ui.splitter.setSizes([700,0])
+        self.ui.splitter_2.setSizes([0,700])
+        self.bot_velpub, self.foe_velpub = [], []
+        self.bot_sub, self.foe_sub = [], []
         self.master_vel = MasterVelocity()
         self.lines_item = LinesItem()
         ## scene settings
@@ -155,6 +157,15 @@ class TeleopGUI(QtWidgets.QMainWindow) :
         self.ui.wp_graphicsView.setRenderHint(QtGui.QPainter.Antialiasing)
         FIELD_SCALE = 0.5
         self.ui.wp_graphicsView.scale(FIELD_SCALE, FIELD_SCALE)
+
+        # prepare container
+        self.combo_box = {'bot':[], 'foe':[]}
+        self.check_box = {'bot':[], 'foe':[]}
+        self.spin_box = {'bot':[], 'foe':[]}
+        self.angle_rate_box = {'bot':[], 'foe':[]}
+        # fill the box
+        self.set_boxes()
+
         ### some control widget settings
         keys = ['stop', 'master', 'circular', 'waypoint']
         for i in range(N_ROBOT) :
@@ -169,26 +180,23 @@ class TeleopGUI(QtWidgets.QMainWindow) :
             self.wp_scene.addItem(self.bot_sub[i])
             self.wp_scene.addItem(self.foe_sub[i])
         for key in keys :
-            self.ui.bot_comboBox_1.addItem(key)
-            self.ui.bot_comboBox_2.addItem(key)
-            self.ui.bot_comboBox_3.addItem(key)
-            self.ui.bot_comboBox_4.addItem(key)
-            self.ui.bot_comboBox_5.addItem(key)
-            self.ui.foe_comboBox_1.addItem(key)
-            self.ui.foe_comboBox_2.addItem(key)
-            self.ui.foe_comboBox_3.addItem(key)
-            self.ui.foe_comboBox_4.addItem(key)
-            self.ui.foe_comboBox_5.addItem(key)
+            for box in self.combo_box['bot'] :
+                box.addItem(key)
+            for box in self.combo_box['foe'] :
+                box.addItem(key)
         for i in range(len(self.bot_sub)) :
             self.ui.wp_comboBox.addItem('bot %s'%(i+1))
         for i in range(len(self.foe_sub)) :
             self.ui.wp_comboBox.addItem('foe %s'%(i+1))
 
         ## set connection and timer (for rospy check)
+        self.ui.save_btn.clicked.connect(self.save_yaml)
+        self.ui.load_btn.clicked.connect(self.load_yaml)
         self.ui.wp_setBtn.clicked.connect(self.setWaypoints)
         self.ui.wp_clearBtn.clicked.connect(self.clearWaypoints)
         self.widget.setWindowTitle('Teleoperation')
         self.setCentralWidget(self.widget)
+        self.centralWidget().layout().setContentsMargins(0,0,0,0)
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.update)
         self.timer.start(100)
@@ -232,6 +240,30 @@ class TeleopGUI(QtWidgets.QMainWindow) :
             self.widget.close()
             self.fileQuit()
 
+    def save_yaml(self) :
+        f = QtWidgets.QFileDialog.getSaveFileName()
+        waypoints = {'bot' : [], 'foe' : []}
+        for i in range(len(self.bot_sub)) :
+            waypoints['bot'].append([w for w in self.bot_sub[i].waypoints])
+        for i in range(len(self.foe_sub)) :
+            waypoints['foe'].append([w for w in self.foe_sub[i].waypoints])
+        stream = file(f[0], 'w+')
+        yaml.dump(waypoints, stream=stream)
+        print yaml.dump(waypoints)
+
+    def load_yaml(self) :
+        self.clearWaypoints()
+        f = QtWidgets.QFileDialog.getOpenFileName()
+        stream = file(f[0], 'r')
+        waypoints = yaml.load(stream)
+        for i in range(len(waypoints['bot'])) :
+            if len(waypoints['bot'][i]) :
+                self.bot_sub[i].setWaypoints(waypoints['bot'][i])
+        for i in range(len(waypoints['foe'])) :
+            if len(waypoints['foe'][i]) :
+                self.foe_sub[i].setWaypoints(waypoints['foe'][i])
+        print waypoints
+
     def setWaypoints(self) :
         i = self.ui.wp_comboBox.currentIndex()
         if i < 0 :
@@ -256,55 +288,84 @@ class TeleopGUI(QtWidgets.QMainWindow) :
             self.foe_sub[i].setWaypoints(None)
 
     def get_gui_config(self) :
-        bot_vm = []
-        foe_vm = []
-        bot_key = []
-        foe_key = []
-        bot_rate = []
-        foe_rate = []
-        bot_checkboxes = []
-        foe_checkboxes = []
-        bot_checkboxes.append(self.ui.bot_checkBox_1.isChecked())
-        bot_checkboxes.append(self.ui.bot_checkBox_2.isChecked())
-        bot_checkboxes.append(self.ui.bot_checkBox_3.isChecked())
-        bot_checkboxes.append(self.ui.bot_checkBox_4.isChecked())
-        bot_checkboxes.append(self.ui.bot_checkBox_5.isChecked())
-        foe_checkboxes.append(self.ui.foe_checkBox_1.isChecked())
-        foe_checkboxes.append(self.ui.foe_checkBox_2.isChecked())
-        foe_checkboxes.append(self.ui.foe_checkBox_3.isChecked())
-        foe_checkboxes.append(self.ui.foe_checkBox_4.isChecked())
-        foe_checkboxes.append(self.ui.foe_checkBox_5.isChecked())
-        bot_vm.append(self.ui.bot_doubleSpinBox_1.value())
-        bot_vm.append(self.ui.bot_doubleSpinBox_2.value())
-        bot_vm.append(self.ui.bot_doubleSpinBox_3.value())
-        bot_vm.append(self.ui.bot_doubleSpinBox_4.value())
-        bot_vm.append(self.ui.bot_doubleSpinBox_5.value())
-        foe_vm.append(self.ui.foe_doubleSpinBox_1.value())
-        foe_vm.append(self.ui.foe_doubleSpinBox_2.value())
-        foe_vm.append(self.ui.foe_doubleSpinBox_3.value())
-        foe_vm.append(self.ui.foe_doubleSpinBox_4.value())
-        foe_vm.append(self.ui.foe_doubleSpinBox_5.value())
-        bot_key.append(self.ui.bot_comboBox_1.currentText())
-        bot_key.append(self.ui.bot_comboBox_2.currentText())
-        bot_key.append(self.ui.bot_comboBox_3.currentText())
-        bot_key.append(self.ui.bot_comboBox_4.currentText())
-        bot_key.append(self.ui.bot_comboBox_5.currentText())
-        foe_key.append(self.ui.foe_comboBox_1.currentText())
-        foe_key.append(self.ui.foe_comboBox_2.currentText())
-        foe_key.append(self.ui.foe_comboBox_3.currentText())
-        foe_key.append(self.ui.foe_comboBox_4.currentText())
-        foe_key.append(self.ui.foe_comboBox_5.currentText())
-        bot_rate.append(self.ui.bot_angle_rate_doubleSpinBox_1.value())
-        bot_rate.append(self.ui.bot_angle_rate_doubleSpinBox_2.value())
-        bot_rate.append(self.ui.bot_angle_rate_doubleSpinBox_3.value())
-        bot_rate.append(self.ui.bot_angle_rate_doubleSpinBox_4.value())
-        bot_rate.append(self.ui.bot_angle_rate_doubleSpinBox_5.value())
-        foe_rate.append(self.ui.foe_angle_rate_doubleSpinBox_1.value())
-        foe_rate.append(self.ui.foe_angle_rate_doubleSpinBox_2.value())
-        foe_rate.append(self.ui.foe_angle_rate_doubleSpinBox_3.value())
-        foe_rate.append(self.ui.foe_angle_rate_doubleSpinBox_4.value())
-        foe_rate.append(self.ui.foe_angle_rate_doubleSpinBox_5.value())
+        bot_checkboxes = [box.isChecked() for box in self.check_box['bot']]
+        foe_checkboxes = [box.isChecked() for box in self.check_box['foe']]
+        bot_vm = [box.value() for box in self.spin_box['bot']]
+        foe_vm = [box.value() for box in self.spin_box['foe']]
+        bot_key = [box.currentText() for box in self.combo_box['bot']]
+        foe_key = [box.currentText() for box in self.combo_box['foe']]
+        bot_rate = [box.value() for box in self.angle_rate_box['bot']]
+        foe_rate = [box.value() for box in self.angle_rate_box['foe']]
         return (bot_checkboxes, bot_key, bot_vm, bot_rate), (foe_checkboxes, foe_key, foe_vm, foe_rate)
 
     def get_master_vel(self) :
         return self.master_vel.vx, self.master_vel.vy, self.master_vel.w
+
+    def set_boxes(self) :
+        self.combo_box = {
+            'bot' : [
+                self.ui.bot_comboBox_1,
+                self.ui.bot_comboBox_2,
+                self.ui.bot_comboBox_3,
+                self.ui.bot_comboBox_4,
+                self.ui.bot_comboBox_5
+            ],
+            'foe' : [
+                self.ui.foe_comboBox_1,
+                self.ui.foe_comboBox_2,
+                self.ui.foe_comboBox_3,
+                self.ui.foe_comboBox_4,
+                self.ui.foe_comboBox_5
+            ]
+        }
+
+        self.check_box = {
+            'bot' : [
+                self.ui.bot_checkBox_1,
+                self.ui.bot_checkBox_2,
+                self.ui.bot_checkBox_3,
+                self.ui.bot_checkBox_4,
+                self.ui.bot_checkBox_5
+            ],
+            'foe' : [
+                self.ui.foe_checkBox_1,
+                self.ui.foe_checkBox_2,
+                self.ui.foe_checkBox_3,
+                self.ui.foe_checkBox_4,
+                self.ui.foe_checkBox_5
+            ]
+        }
+
+        self.spin_box = {
+            'bot' : [
+                self.ui.bot_doubleSpinBox_1,
+                self.ui.bot_doubleSpinBox_2,
+                self.ui.bot_doubleSpinBox_3,
+                self.ui.bot_doubleSpinBox_4,
+                self.ui.bot_doubleSpinBox_5
+            ],
+            'foe' : [
+                self.ui.foe_doubleSpinBox_1,
+                self.ui.foe_doubleSpinBox_2,
+                self.ui.foe_doubleSpinBox_3,
+                self.ui.foe_doubleSpinBox_4,
+                self.ui.foe_doubleSpinBox_5
+            ]
+        }
+
+        self.angle_rate_box = {
+            'bot' : [
+                self.ui.bot_angle_rate_doubleSpinBox_1,
+                self.ui.bot_angle_rate_doubleSpinBox_2,
+                self.ui.bot_angle_rate_doubleSpinBox_3,
+                self.ui.bot_angle_rate_doubleSpinBox_4,
+                self.ui.bot_angle_rate_doubleSpinBox_5
+            ],
+            'foe' : [
+                self.ui.foe_angle_rate_doubleSpinBox_1,
+                self.ui.foe_angle_rate_doubleSpinBox_2,
+                self.ui.foe_angle_rate_doubleSpinBox_3,
+                self.ui.foe_angle_rate_doubleSpinBox_4,
+                self.ui.foe_angle_rate_doubleSpinBox_5
+            ]
+        }

@@ -1,3 +1,5 @@
 <launch>
+    <!-- for testing -->
+    <!-- <node name="robosoccer_teleop" pkg="robosoccer_teleop" type="robosoccer_teleop_node.py" output="screen"/> -->
     <node name="robosoccer_teleop" pkg="robosoccer_teleop" type="robosoccer_teleop_node.py"/>
 </launch>
