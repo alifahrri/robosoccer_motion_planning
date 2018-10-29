@@ -6,3 +6,4 @@ build/*
 *workspace*
 *.so
 *.o
+src/robosoccer_trajectory_tracking/scripts/tracker.c
