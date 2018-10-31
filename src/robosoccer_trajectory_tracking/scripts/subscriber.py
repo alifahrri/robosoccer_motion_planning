@@ -4,7 +4,7 @@ import rospy
 from nav_msgs import msg as navmsg
 import std_msgs
 import control_msgs
-import geometry_msgs
+import geometry_msgs as geomsg
 
 import nubot_common.msg as msg
 
@@ -23,6 +23,14 @@ class RobotSubscriber(object) :
         self.pos = (robot.pos.x/100.0, robot.pos.y/100.0, robot.heading.theta)
         self.vel = (robot.vtrans.x/100.0, robot.vtrans.y/100.0, robot.vrot)
         break
+
+class GoalSubscriber() :
+  def __init__(self, *args, **kwargs):
+    self.sub = rospy.Subscriber('/move_base_simple/goal', geomsg.msg.PoseStamped, callback=self.goal_callback)
+    self.goal = geomsg.msg.PoseStamped()
+ 
+  def goal_callback(self, msg) :
+    self.goal = msg
 
 class TrajectorySubscriber(object) :
   def __init__(self, topic, *args, **kwargs) :
