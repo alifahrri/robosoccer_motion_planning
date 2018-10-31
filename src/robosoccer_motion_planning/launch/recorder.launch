@@ -1,0 +1,6 @@
+<launch>
+  <arg name="path" value="$(env HOME)/data/robosoccer/"/>
+  <arg name="topic" value="/move_base_simple/goal /robosoccer_trajectory_pos /robosoccer_trajectory_vel /nubot1/omnivision/OmniVisionInfo /rrtvis_msgs /tf /tf_static /tracker_info /clock"/>
+  <!--  <arg name="topic" value="-a"/>-->
+  <node pkg="rosbag" type="record" name="rosbag_robosoccer" respawn="true" args="-o $(arg path) $(arg topic)" output="screen" />
+</launch>

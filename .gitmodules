@@ -4,3 +4,9 @@
 [submodule "src/motion_planning"]
 	path = src/motion_planning
 	url = https://alifahrri@bitbucket.org/alifahrri/motion_planning.git
+[submodule "src/gazebo2rviz"]
+	path = src/gazebo2rviz
+	url = https://github.com/alifahrri/gazebo2rviz.git
+[submodule "src/pysdf"]
+	path = src/pysdf
+	url = https://github.com/alifahrri/pysdf.git

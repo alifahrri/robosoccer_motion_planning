@@ -1,0 +1,6 @@
+<launch>
+  <arg name="file"/>
+  <node pkg="rosbag" type="play" name="player" output="screen" args="--pause $(arg file)"/>
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find robosoccer_motion_planning)/rviz/robosoccer_viz_config.rviz"/>
+  <include file="$(find robosoccer_trajectory_tracking)/launch/vis.launch"/>
+</launch>

@@ -1,0 +1,4 @@
+<launch>
+  <node name="robosoccer_motion_planning_trajectory_node" pkg="robosoccer_motion_planning" type="robosoccer_motion_planning_trajectory_node" output="screen"/>
+  <node name="robosoccer_motion_planning_trajectory_client" pkg="robosoccer_motion_planning" type="trajectory_demo.py" output="screen"/>
+</launch>
