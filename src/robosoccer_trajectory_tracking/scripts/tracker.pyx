@@ -12,6 +12,7 @@ import array
 cdef extern from "math.h" :
   double sin(double x)
   double cos(double x)
+  double fabs(double x)
 
 # helper function to create matrix of size x size
 cdef np.ndarray[np.float_t, ndim=2] ccreatemat(double[:] ptr, int size) :
@@ -28,32 +29,6 @@ cdef cmatmul(double[:,:] A,  double[:,:] B, double[:,:] R, int n) :
         s = s + A[i,k] * B[k,j]
       R[i,j] = s
 
-# compute matrix ki and kp from characteristic polynomial,
-# given error, sum of error, command (pos & vel)
-# return tuple of matrix
-cdef ccompute_from_char_poly(np.ndarray[dtype=np.float_t, ndim=1] pos, np.ndarray[dtype=np.float_t, ndim=1] vel, np.ndarray[dtype=np.float_t, ndim=2] ppoly, np.ndarray[dtype=np.float_t, ndim=2] ipoly, double[:] p_gain, double[:] i_gain) :
-  cdef double c = cos(pos[2])
-  cdef double s = sin(pos[2])
-  cdef double u = vel[0]
-  cdef double v = vel[1]
-  cdef np.ndarray[np.float_t, ndim=2] B = np.matrix([[c, -s, 0], [s, c, 0], [0, 0, 1]])
-  cdef np.ndarray[np.float_t, ndim=2] A = np.matrix([[0, 0, -u*s-v*c], [0, 0, u*c-v*s], [0, 0, 0]])
-  cdef np.ndarray[np.float_t, ndim=2] BINV = B.transpose()
-  cdef int i=0, j=0, k=0
-  cdef double sp = 0.0
-  cdef double si = 0.0
-  cdef int idx = (i*3)+j
-  for i in range(3) :
-    for j in range(3) :
-      sp = 0.0
-      si = 0.0
-      idx = (i*3)+j
-      for k in range(3) :
-        si = si + -1 * BINV[i,k] * ipoly[k,j]
-        sp = sp + BINV[i,k] * (A[k,j]-ppoly[k,j])
-      p_gain[idx] = sp
-      i_gain[idx] = si
-
 # create 3x3 rotation matrix
 cdef np.ndarray[np.float_t, ndim=2] c_rotmat(double angle) :
   cdef double c = cos(angle)
@@ -61,53 +36,11 @@ cdef np.ndarray[np.float_t, ndim=2] c_rotmat(double angle) :
   cdef double[9] rot_raw = [c, -s, 0, s, c, 0, 0, 0, 1]
   return np.matrix(rot_raw).reshape(3,3)
 
-# find reference state
-# given current time, vector of x, y, w, vx (or u), vy (or v), vw (or r), adn t
-# returning tuple of pos (x,y,z) and vel (x,y,z)
-# we pass pointer bc cdef cant explicit return tuple of array
-cdef cget_ref_state(double time, np.ndarray[np.float_t, ndim=1] x, np.ndarray[np.float_t, ndim=1] y, np.ndarray[np.float_t, ndim=1] w, np.ndarray[np.float_t, ndim=1] u, np.ndarray[np.float_t, ndim=1] v, np.ndarray[np.float_t, ndim=1] r, np.ndarray[np.float_t, ndim=1] t, double *p_ret, double *v_ret, int n) :
-  cdef (double, double) rx, ry, rw, rvx, rvy, rvw
-  cdef double dt
-  cdef int i
-  cdef int l = n
-  rx, ry, rw = (x[0], x[0]), (y[0], y[0]), (w[0], w[0])
-  rvx, rvy, rvw = (u[0], u[0]), (v[0], v[0]), (r[0], r[0])
-  dt = time - t[0]
-  if time < t[0] : pass 
-  elif time > t[-1] :
-    rx, ry, rw = (x[-1], x[-1]), (y[-1], y[-1]), (w[-1], w[-1])
-    rvx, rvy, rvw = (u[-1], u[-1]), (v[-1], v[-1]), (r[-1], r[-1])
-  else :
-    # l = len(t)
-    for i in range(n) :
-      if i == 0 : continue
-      elif (time > t[i-1]) and (time < t[i]) :
-        rx, ry, rw = (x[i-1], x[i]), (y[i-1], y[i]), (w[i-1], w[i])
-        rvx, rvy, rvw = (u[i-1], u[i]), (v[i-1], v[i]), (r[i-1], r[i])
-        break
-  cdef np.ndarray[np.float_t, ndim=2] pvec
-  cdef np.ndarray[np.float_t, ndim=2] vvec
-  pvec = np.matrix([(rx[0] + (rx[1]-rx[0]) * dt), (ry[0] + (ry[1]-ry[0]) * dt), (rw[0] + (rw[1]-rw[0]) * dt)]).transpose()
-  vvec = np.matrix([(rvx[0] + (rvx[1]-rvx[0]) * dt), (rvy[0] + (rvy[1]-rvy[0]) * dt), (rvw[0] + (rvw[1]-rvw[0]) * dt)]).transpose()
-  # rotation matrix
-  # cdef double c = cos(pvec[2])
-  # cdef double s = sin(pvec[2])
-  # cdef double[9] rot_raw = [c, -s, 0, s, c, 0, 0, 0, 1]
-  # transform reference velocity in global frame to local frame
-  cdef np.ndarray[np.float_t, ndim=2] rot = c_rotmat(pvec[2])
-  vvec = rot * vvec
-  # return a flattened array
-  for i in range(3) : 
-    p_ret[i] = pvec[i,0]
-    v_ret[i] = vvec[i,0]
-
-# def get_ref_state(double time, double[:] x, double[:] y, double[:] w, double[:] u, double[:] v, double[:] r, double[:] t) :
 @cython.boundscheck(False) 
 @cython.wraparound(False)
 def get_ref_state(double time, np.ndarray[np.float_t, ndim=1] x, np.ndarray[np.float_t, ndim=1] y, np.ndarray[np.float_t, ndim=1] w, np.ndarray[np.float_t, ndim=1] u, np.ndarray[np.float_t, ndim=1] v, np.ndarray[np.float_t, ndim=1] r, np.ndarray[np.float_t, ndim=1] t, int n) :
   cdef double[3] p_ret
   cdef double[3] v_ret
-  # cget_ref_state(time, x, y, w, u, v, r, t, p_ret, v_ret, n)
   cdef (double, double) rx, ry, rw, rvx, rvy, rvw
   cdef double dt
   cdef int i
@@ -129,12 +62,15 @@ def get_ref_state(double time, np.ndarray[np.float_t, ndim=1] x, np.ndarray[np.f
         break
   cdef np.ndarray[np.float_t, ndim=2] pvec
   cdef np.ndarray[np.float_t, ndim=2] vvec
-  pvec = np.matrix([(rx[0] + (rx[1]-rx[0]) * dt), (ry[0] + (ry[1]-ry[0]) * dt), (rw[0] + (rw[1]-rw[0]) * dt)]).transpose()
+  cdef double dw = (rw[1]-rw[0])
+  if fabs(dw) > math.pi :
+    dw = (-2*math.pi + dw) if dw > 0 else (2*math.pi + dw)
+  cdef double w = rw[0] + dw * dt
+  if fabs(w) > math.pi :
+    w = (-2*math.pi + w) if w > 0 else (2*math.pi + w)
+  pvec = np.matrix([(rx[0] + (rx[1]-rx[0]) * dt), (ry[0] + (ry[1]-ry[0]) * dt), w]).transpose()
   vvec = np.matrix([(rvx[0] + (rvx[1]-rvx[0]) * dt), (rvy[0] + (rvy[1]-rvy[0]) * dt), (rvw[0] + (rvw[1]-rvw[0]) * dt)]).transpose()
   # rotation matrix
-  # cdef double c = cos(pvec[2])
-  # cdef double s = sin(pvec[2])
-  # cdef double[9] rot_raw = [c, -s, 0, s, c, 0, 0, 0, 1]
   # transform reference velocity in global frame to local frame
   cdef np.ndarray[np.float_t, ndim=2] rot = c_rotmat(pvec[2])
   vvec = rot * vvec
@@ -155,13 +91,13 @@ def compute_error(np.ndarray[np.float_t, ndim=1] cpos, np.ndarray[np.float_t, nd
 # compute pi gain matrix from characteristic polynomial
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def compute_from_char_poly(np.ndarray[dtype=np.float_t, ndim=1] pos, np.ndarray[dtype=np.float_t, ndim=1] vel, np.ndarray[dtype=np.float_t, ndim=2] ppoly, np.ndarray[dtype=np.float_t, ndim=2] ipoly) :
+cpdef compute_from_char_poly(np.ndarray[dtype=np.float_t, ndim=1] pos, np.ndarray[dtype=np.float_t, ndim=1] vel, np.ndarray[dtype=np.float_t, ndim=2] ppoly, np.ndarray[dtype=np.float_t, ndim=2] ipoly) :
   cdef double[9] p_gain
   cdef double[9] i_gain
-  cdef double c = cos(pos[2])
-  cdef double s = sin(pos[2])
   cdef double u = vel[0]
   cdef double v = vel[1]
+  cdef double c = cos(pos[2])
+  cdef double s = sin(pos[2])
   cdef np.ndarray[np.float_t, ndim=2] B = np.matrix([[c, -s, 0], [s, c, 0], [0, 0, 1]])
   cdef np.ndarray[np.float_t, ndim=2] A = np.matrix([[0, 0, -u*s-v*c], [0, 0, u*c-v*s], [0, 0, 0]])
   cdef np.ndarray[np.float_t, ndim=2] BINV = B.transpose()

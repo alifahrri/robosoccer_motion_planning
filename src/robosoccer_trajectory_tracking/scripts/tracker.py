@@ -5,7 +5,7 @@ import nubot_common.msg as nubotmsg
 import numpy as np
 import math
 
-class PITracker(RobotSubscriber) :
+class PITracker(RobotSubscriber, GoalSubscriber) :
     def __init__(self, *args, **kwargs):
         agent_id = 1
         all_names = rospy.get_param_names()
@@ -14,6 +14,7 @@ class PITracker(RobotSubscriber) :
             agent_id = rospy.get_param('/agent_id')
         rospy.logwarn('agent : %s'%agent_id)
         # initialize super class
+        GoalSubscriber.__init__(self)
         RobotSubscriber.__init__(self,'/nubot'+str(agent_id)+'/omnivision/OmniVisionInfo', agent_id)
         ### create nav path subscriber
         self.sub = {
@@ -42,8 +43,8 @@ class PITracker(RobotSubscriber) :
         }
         # characteristic polynomial for computing gain
         self.char_poly = {
-            'p' : np.diag([1., 1., 1.]), 
-            'i' : np.diag([.2, .2, .2])
+            'p' : np.diag([.7, .7, .7]), 
+            'i' : np.diag([.05, .05, .05])
         }
         # command (or reference if you like)
         self.command = {
@@ -53,7 +54,7 @@ class PITracker(RobotSubscriber) :
         rospy.logwarn('READY')
 
     def compute_pi_from_char_poly(self) :
-        t0 = rospy.get_time()
+        # t0 = rospy.get_time()
         pos, vel = self.command['pos'], self.command['vel']
         poly = self.char_poly
         c, s = math.cos(pos['w']), math.cos(pos['w'])
@@ -61,10 +62,13 @@ class PITracker(RobotSubscriber) :
         B = np.matrix([[c, -s, 0],[s, c, 0],[0, 0, 1]])
         A = np.matrix([[0, 0, -u*s-v*c],[0, 0, u*c-v*s],[0, 0, 0]])
         self.pid = {
-            'p' : np.linalg.inv(-1 * B) * poly['p'],
-            'i' : np.linalg.inv(B) * (A - poly['i'])
+            # inverse of rotation matrix is it's transpose
+            'i' : -1 * B.transpose() * poly['i'],
+            'p' : B.transpose() * (A - poly['p'])
+            # 'p' : np.linalg.inv(-1 * B) * poly['p'],
+            # 'i' : np.linalg.inv(B) * (A - poly['i'])
         }
-        rospy.loginfo('computed gain in %s s'%(rospy.get_time() - t0))
+        # rospy.loginfo('computed gain in %s s'%(rospy.get_time() - t0))
     
     def compute_control(self) :
         t0 = rospy.get_time()
@@ -153,22 +157,23 @@ class PITracker(RobotSubscriber) :
         return False
 
     def publish(self) :
-        e = self.error
-        c = self.control
-        p = self.pid
+        e, c, k = self.error, self.control, self.pid
         s = e['sum']
-        rospy.loginfo('pi:(%s,%s)'%(p['p'],p['i']))
-        rospy.logwarn('E:(%s,%s,%s)'%(e['x'],e['y'],e['w']))
-        rospy.logwarn('S:(%s,%s,%s)'%(s['x'],s['y'],s['w']))
-        rospy.logwarn('C:(%s,%s,%s)'%(c['x'],c['y'],c['w']))
+        vel = nubotmsg.VelCmd()
+        vel.Vx, vel.Vy, vel.w = c['x'], c['y'], c['w']
+        p, i = k['p'], k['i']
+        rospy.logwarn('command\t:(%s,%s,%s)'%(c['com'][0],c['com'][1],c['com'][1]))
+        rospy.logwarn('gain:\nKP\n:%s\nKI:\n%s)'%(p,i))
+        rospy.logwarn('error\t:(%s,%s,%s)'%(e['x'],e['y'],e['w']))
+        rospy.logwarn('control\t:(%s,%s,%s)'%(c['x'],c['y'],c['w']))
+        self.pub.publish(vel)
     
     def callback(self, msg) :
         rospy.loginfo('pi_tracker update :')
         super(PITracker, self).callback(msg)
-        time = self.header.stamp.to_sec()
-        self.compute_error(time)
-        self.compute_pi_from_char_poly()
-        # if self.compute_error(time) :
-        #     self.compute_pi_from_char_poly()
-        #     self.compute_control()
-        #     self.publish()
+        # time = self.header.stamp.to_sec()
+        time = rospy.get_time()
+        if self.compute_error(time) :
+            self.compute_pi_from_char_poly()
+            self.compute_control()
+            self.publish()
