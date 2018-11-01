@@ -5,10 +5,10 @@ from distutils.extension import Extension
 from Cython.Distutils import build_ext
 
 setup(
-    name = 'tracker',
+    name = 'cython_tracker',
     ext_modules=[
-    Extension('test',
-            sources=['tracker.pyx'],
+    Extension('cython_tracker',
+            sources=['cython_tracker.pyx'],
             extra_compile_args=['-O3'],
             language='c++')
     ],

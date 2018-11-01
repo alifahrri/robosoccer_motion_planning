@@ -21,6 +21,7 @@ class PITracker(RobotSubscriber, GoalSubscriber) :
             'pos' : TrajectorySubscriber('robosoccer_trajectory_pos'),
             'vel' : TrajectorySubscriber('robosoccer_trajectory_vel')
         }
+        self.sub['pos'].register_callback(self.trajectory_callback)
         self.pub = rospy.Publisher('/nubot'+str(agent_id)+'/nubotcontrol/velcmd', nubotmsg.VelCmd, queue_size=3)
         self.error = {
             'x' : .0, 'y' : .0, 'w' : .0,
@@ -51,9 +52,10 @@ class PITracker(RobotSubscriber, GoalSubscriber) :
             'pos' : {'x' : .0, 'y' : .0, 'w' : .0,},
             'vel' : {'x' : .0, 'y' : .0, 'w' : .0,}
         }
+        self.enable = False
         rospy.logwarn('READY')
 
-    def compute_pi_from_char_poly(self) :
+    def compute_gain_from_char_poly(self) :
         # t0 = rospy.get_time()
         pos, vel = self.command['pos'], self.command['vel']
         poly = self.char_poly
@@ -167,6 +169,30 @@ class PITracker(RobotSubscriber, GoalSubscriber) :
         rospy.logwarn('error\t:(%s,%s,%s)'%(e['x'],e['y'],e['w']))
         rospy.logwarn('control\t:(%s,%s,%s)'%(c['x'],c['y'],c['w']))
         self.pub.publish(vel)
+
+    def trajectory_callback(self, t, x, y, w) :
+        # reset error when new trajectory is received
+        self.error = {
+            'x' : .0, 'y' : .0, 'w' : .0,
+            'sum' : {
+                # sum for compute integral part of control
+                'x' : .0, 'y' : .0, 'w' : .0,
+            }
+        }
+        self.enable = True
+
+    def goal_callback(self, msg) :
+        rospy.loginfo('pi_tracker goal callback :')
+        super(PITracker, self).goal_callback(msg)
+        # reset error when goal is changed
+        self.error = {
+            'x' : .0, 'y' : .0, 'w' : .0,
+            'sum' : {
+                # sum for compute integral part of control
+                'x' : .0, 'y' : .0, 'w' : .0,
+            }
+        }
+        self.enable = True
     
     def callback(self, msg) :
         rospy.loginfo('pi_tracker update :')
@@ -174,6 +200,6 @@ class PITracker(RobotSubscriber, GoalSubscriber) :
         # time = self.header.stamp.to_sec()
         time = rospy.get_time()
         if self.compute_error(time) :
-            self.compute_pi_from_char_poly()
+            self.compute_gain_from_char_poly()
             self.compute_control()
             self.publish()

@@ -4,6 +4,7 @@
 # import math
 import numpy as np
 
+import math
 cimport cython
 cimport numpy as np
 from cpython cimport array
@@ -38,7 +39,7 @@ cdef np.ndarray[np.float_t, ndim=2] c_rotmat(double angle) :
 
 @cython.boundscheck(False) 
 @cython.wraparound(False)
-def get_ref_state(double time, np.ndarray[np.float_t, ndim=1] x, np.ndarray[np.float_t, ndim=1] y, np.ndarray[np.float_t, ndim=1] w, np.ndarray[np.float_t, ndim=1] u, np.ndarray[np.float_t, ndim=1] v, np.ndarray[np.float_t, ndim=1] r, np.ndarray[np.float_t, ndim=1] t, int n) :
+cpdef get_ref_state(double time, np.ndarray[np.float_t, ndim=1] x, np.ndarray[np.float_t, ndim=1] y, np.ndarray[np.float_t, ndim=1] w, np.ndarray[np.float_t, ndim=1] u, np.ndarray[np.float_t, ndim=1] v, np.ndarray[np.float_t, ndim=1] r, np.ndarray[np.float_t, ndim=1] t, int n) :
   cdef double[3] p_ret
   cdef double[3] v_ret
   cdef (double, double) rx, ry, rw, rvx, rvy, rvw
@@ -47,38 +48,44 @@ def get_ref_state(double time, np.ndarray[np.float_t, ndim=1] x, np.ndarray[np.f
   cdef int l = n
   rx, ry, rw = (x[0], x[0]), (y[0], y[0]), (w[0], w[0])
   rvx, rvy, rvw = (u[0], u[0]), (v[0], v[0]), (r[0], r[0])
-  dt = time - t[0]
-  if time < t[0] : pass 
+  if time < t[0] : 
+    dt = time - t[0]
   elif time > t[n-1] :
     rx, ry, rw = (x[n-1], x[n-1]), (y[n-1], y[n-1]), (w[n-1], w[n-1])
     rvx, rvy, rvw = (u[n-1], u[n-1]), (v[n-1], v[n-1]), (r[n-1], r[n-1])
+    dt = time - t[n-1]
   else :
-    # l = len(t)
     for i in range(n) :
       if i == 0 : continue
-      elif (time > t[i-1]) and (time < t[i]) :
+      elif ((time >= t[i-1]) and (time <= t[i])) :
         rx, ry, rw = (x[i-1], x[i]), (y[i-1], y[i]), (w[i-1], w[i])
         rvx, rvy, rvw = (u[i-1], u[i]), (v[i-1], v[i]), (r[i-1], r[i])
+        dt = time - t[i-1]
         break
   cdef np.ndarray[np.float_t, ndim=2] pvec
   cdef np.ndarray[np.float_t, ndim=2] vvec
   cdef double dw = (rw[1]-rw[0])
   if fabs(dw) > math.pi :
     dw = (-2*math.pi + dw) if dw > 0 else (2*math.pi + dw)
-  cdef double w = rw[0] + dw * dt
-  if fabs(w) > math.pi :
-    w = (-2*math.pi + w) if w > 0 else (2*math.pi + w)
-  pvec = np.matrix([(rx[0] + (rx[1]-rx[0]) * dt), (ry[0] + (ry[1]-ry[0]) * dt), w]).transpose()
+  cdef double theta = rw[0] + dw * dt
+  if fabs(theta) > math.pi :
+    theta = (-2*math.pi + theta) if theta > 0 else (2*math.pi + theta)
+  pvec = np.matrix([(rx[0] + (rx[1]-rx[0]) * dt), (ry[0] + (ry[1]-ry[0]) * dt), theta]).transpose()
   vvec = np.matrix([(rvx[0] + (rvx[1]-rvx[0]) * dt), (rvy[0] + (rvy[1]-rvy[0]) * dt), (rvw[0] + (rvw[1]-rvw[0]) * dt)]).transpose()
   # rotation matrix
   # transform reference velocity in global frame to local frame
-  cdef np.ndarray[np.float_t, ndim=2] rot = c_rotmat(pvec[2])
-  vvec = rot * vvec
+  cdef double c = cos(theta)
+  cdef double s = sin(theta)
+  cdef double[9] rot_raw = [c, -s, 0, s, c, 0, 0, 0, 1]
+  # cdef np.ndarray[np.float_t, ndim=2] rot = c_rotmat(theta)
+  cdef np.ndarray[np.float_t, ndim=2] rot = np.matrix(rot_raw).reshape(3,3)
+  # vvec = rot.transpose() * vvec
+  vvec = rot.transpose() * vvec
   # return a flattened array
   for i in range(3) : 
     p_ret[i] = pvec[i,0]
     v_ret[i] = vvec[i,0]
-  return p_ret, v_ret
+  return p_ret, v_ret, i
 
 # compute error term
 # takes tuple of double of current pos, ref pos
@@ -86,7 +93,11 @@ def get_ref_state(double time, np.ndarray[np.float_t, ndim=1] x, np.ndarray[np.f
 @cython.boundscheck(False)
 @cython.wraparound(False)
 def compute_error(np.ndarray[np.float_t, ndim=1] cpos, np.ndarray[np.float_t, ndim=1] rpos) :
-  return (cpos[0] - rpos[0], cpos[1] - rpos[1], cpos[2] - rpos[2])
+  # angle wrap around
+  cdef double dw = cpos[2] - rpos[2]
+  if fabs(dw) > math.pi :
+    dw = (-2*math.pi + dw) if dw > 0 else (2*math.pi + dw)
+  return (cpos[0] - rpos[0], cpos[1] - rpos[1], dw)
 
 # compute pi gain matrix from characteristic polynomial
 @cython.boundscheck(False)
@@ -105,17 +116,20 @@ cpdef compute_from_char_poly(np.ndarray[dtype=np.float_t, ndim=1] pos, np.ndarra
   cdef double sp = 0.0
   cdef double si = 0.0
   cdef int idx = (i*3)+j
-  for i in range(3) :
-    for j in range(3) :
-      sp = 0.0
-      si = 0.0
-      idx = (i*3)+j
-      for k in range(3) :
-        si = si + -1 * BINV[i,k] * ipoly[k,j]
-        sp = sp + BINV[i,k] * (A[k,j] - ppoly[k,j])
-      p_gain[idx] = sp
-      i_gain[idx] = si
-  return (np.matrix(p_gain).reshape(3,3), np.matrix(i_gain).reshape(3,3))
+  cdef np.ndarray[np.float_t, ndim=2] kp = BINV * (A-ppoly)
+  cdef np.ndarray[np.float_t, ndim=2] ki = -1. * BINV * ipoly
+  return (kp, ki)
+  # for i in range(3) :
+  #   for j in range(3) :
+  #     sp = 0.0
+  #     si = 0.0
+  #     idx = (i*3)+j
+  #     for k in range(3) :
+  #       si = si + -1 * BINV[i,k] * ipoly[k,j]
+  #       sp = sp + BINV[i,k] * (A[k,j] - ppoly[k,j])
+  #     p_gain[idx] = sp
+  #     i_gain[idx] = si
+  # return (np.matrix(p_gain).reshape(3,3), np.matrix(i_gain).reshape(3,3))
 
 @cython.boundscheck(False)
 @cython.wraparound(False)

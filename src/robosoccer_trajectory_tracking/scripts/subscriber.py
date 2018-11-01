@@ -36,6 +36,11 @@ class TrajectorySubscriber(object) :
   def __init__(self, topic, *args, **kwargs) :
     self.subscriber = rospy.Subscriber(topic, navmsg.Path, callback=self.callback, queue_size=3)
     self.t, self.x, self.y, self.w = [], [], [], []
+    self.callbacks = []
+
+  # add callbacks which will be called on rostopic callback
+  def register_callback(self, cb) :
+    self.callbacks.append(cb)
 
   def callback(self, msg) :
     rospy.loginfo('receive message')
@@ -52,3 +57,5 @@ class TrajectorySubscriber(object) :
       y.append(p.y)
       w.append(yaw)
     self.t, self.x, self.y, self.w = t, x, y, w
+    for cb in self.callbacks :
+      cb(t,x,y,w)

@@ -10,11 +10,11 @@ cy_tracker = None
 
 def test_char_poly_cy():
     """Stupid test function"""
-    cy_tracker.compute_pi_from_char_poly()
+    cy_tracker.compute_gain_from_char_poly()
 
 def test_char_poly_py():
     """Stupid test function"""
-    py_tracker.compute_pi_from_char_poly()
+    py_tracker.compute_gain_from_char_poly()
 
 def test_compute_error_py():
     """Stupid test function"""
