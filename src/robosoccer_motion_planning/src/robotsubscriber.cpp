@@ -1,4 +1,5 @@
 #include "robotsubscriber.h"
+#include "elements.hpp"
 
 using namespace std;
 
@@ -6,41 +7,76 @@ RobotSubscriber::RobotSubscriber(ros::NodeHandle &node, size_t robot_id, TEAM te
   : id(robot_id)
 {
   string topic_name;
+  string rival_topic;
   switch (team) {
   case NUBOT:
     topic_name = string("/nubot") + to_string(id) + "/omnivision/OmniVisionInfo";
+    rival_topic = string("/rival") + to_string(id) + "/omnivision/OmniVisionInfo";
     tf_name = string("nubot") + to_string(id) + "_tf";
     break;
   case RIVAL:
     topic_name = string("/rival") + to_string(id) + "/omnivision/OmniVisionInfo";
+    rival_topic = string("/nubot") + to_string(id) + "/omnivision/OmniVisionInfo";
     tf_name = string("rival") + to_string(id) + "_tf";
     break;
   default:
     break;
   }
   sub = node.subscribe<nubot_common::OminiVisionInfo>(topic_name, 3, &RobotSubscriber::callback, this);
+  rsub = node.subscribe<nubot_common::OminiVisionInfo>(rival_topic, 3, &RobotSubscriber::rival_callback, this);
+}
+
+void RobotSubscriber::rival_callback(const nubot_common::OminiVisionInfo::ConstPtr &msg)
+{
+  robs.clear();
+  for(size_t i=0; i<msg->robotinfo.size(); i++) {
+    auto robotinfo = msg->robotinfo.at(i);
+    decay_t<decltype(robs.front())> s;
+    // for rival, robot pos is flipped; nubot's rule
+    x(s) = -x(robotinfo.pos)*1e-2;
+    y(s) = -y(robotinfo.pos)*1e-2;
+    vx(s) = -x(robotinfo.vtrans)*1e-2;
+    vy(s) = -y(robotinfo.vtrans)*1e-2;
+    robs.push_back(s);
+  }
 }
 
 void RobotSubscriber::callback(const nubot_common::OminiVisionInfo::ConstPtr &msg)
 {
+  obs.clear();
   auto time = msg->header.stamp;
   for(size_t i=0; i<msg->robotinfo.size(); i++) {
     auto agent_id = msg->robotinfo.at(i).AgentID;
+    auto robotinfo = msg->robotinfo.at(i);
+    auto pos_x = x(robotinfo.pos)/100.;
+    auto pos_y = y(robotinfo.pos)/100.;
+    auto vel_x = x(robotinfo.vtrans)/100.;
+    auto vel_y = y(robotinfo.vtrans)/100.;
     if(agent_id == id) {
-      auto px = msg->robotinfo.at(i).pos.x/100.0;
-      auto py = msg->robotinfo.at(i).pos.y/100.0;
-      auto vx = msg->robotinfo.at(i).vtrans.x/100.0;
-      auto vy = msg->robotinfo.at(i).vtrans.y/100.0;
-      get<0>(state) = px; get<1>(state) = py;
-      get<2>(state) = vx; get<3>(state) = vy;
+      //      auto px = msg->robotinfo.at(i).pos.x/100.0;
+      //      auto py = msg->robotinfo.at(i).pos.y/100.0;
+      //      auto vx = msg->robotinfo.at(i).vtrans.x/100.0;
+      //      auto vy = msg->robotinfo.at(i).vtrans.y/100.0;
+      //      get<0>(state) = px; get<1>(state) = py;
+      //      get<2>(state) = vx; get<3>(state) = vy;
+      get<0>(state) = pos_x; get<1>(state) = pos_y;
+      get<2>(state) = vel_x; get<3>(state) = vel_y;
       auto h = heading;
       heading = msg->robotinfo.at(i).heading.theta;
       heading_rate = heading - h;
       // ROS_INFO("robot info(%f,%f,%f,%f)", px, py, vx, vy);
-      break;
+    }
+    else {
+      decay_t<decltype(obs.front())> s;
+      x(s) = pos_x;
+      y(s) = pos_y;
+      vx(s) = vel_x;
+      vy(s) = vel_y;
+      obs.push_back(s);
     }
   }
 
+#if 0
   // select nearest obs, returning index
   auto select_obs = [](auto &pos, auto &obs, auto &exclude) {
     auto id = 0;
@@ -95,6 +131,7 @@ void RobotSubscriber::callback(const nubot_common::OminiVisionInfo::ConstPtr &ms
   if(ids.size() > 0) {
 
   }
+#endif
   last_recv = time;
   //  ROS_INFO("f : %f", f);
   //  for(auto o : obs)
