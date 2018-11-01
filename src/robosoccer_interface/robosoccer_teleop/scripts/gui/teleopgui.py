@@ -13,20 +13,15 @@ N_ROBOT = 5
 class LinesItem(QtWidgets.QGraphicsItem) :
     def __init__(self, *args, **kwargs):
         QtWidgets.QGraphicsItem.__init__(self,None)
-        self.WIDTH = 2000
-        self.HEIGHT = 1400
-        self.STEP = 60
-        self.h_lines = []
-        self.v_lines = []
-        self.waypoints = []
-        WIDTH = self.WIDTH
-        HEIGHT = self.HEIGHT
-        STEP = self.STEP
-        for i in range(WIDTH/STEP+1) :
-            line = QtCore.QLineF(i*STEP-WIDTH/2,-HEIGHT/2,i*STEP-WIDTH/2,HEIGHT/2)
+        self.WIDTH, self.HEIGHT, self.STEP = 2000, 1400, 60
+        self.h_lines, self.v_lines, self.waypoints = [], [], []
+        self.orientation = []
+        w, h, s = self.WIDTH, self.HEIGHT, self.STEP
+        for i in range(w/s+1) :
+            line = QtCore.QLineF(i*s-w/2,-h/2,i*s-w/2,h/2)
             self.v_lines.append(line)
-        for i in range(HEIGHT/STEP+1) :
-            line = QtCore.QLineF(-WIDTH/2,i*STEP-HEIGHT/2,WIDTH/2,i*STEP-HEIGHT/2)
+        for i in range(h/s+1) :
+            line = QtCore.QLineF(-w/2,i*s-h/2,w/2,i*s-h/2)
             self.h_lines.append(line)
         
     def paint(self, painter, option, style) :
@@ -39,6 +34,12 @@ class LinesItem(QtWidgets.QGraphicsItem) :
             painter.setPen(QtCore.Qt.gray)
             painter.setBrush(QtCore.Qt.gray)
             painter.drawEllipse(p1, 10.0, 10.0)
+            if len(self.orientation) > i :
+                p = QtCore.QPointF(p1)
+                angle = self.orientation[i]
+                p.setX(p.x() + 30.0 * math.cos(angle))
+                p.setY(p.y() + 30.0 * math.sin(angle))
+                painter.drawLine(p1,p)
             if i > 0 :
                 p0 = self.waypoints[i-1]
                 painter.drawLine(p0, p1)
@@ -50,11 +51,18 @@ class LinesItem(QtWidgets.QGraphicsItem) :
 
     def mousePressEvent(self, event) :
         self.waypoints.append(event.pos())
+    
+    def mouseReleaseEvent(self, event) :
+        pt0 = self.waypoints[-1]
+        pt1 = event.pos()
+        dp = pt1-pt0
+        self.orientation.append(math.atan2(dp.y(),dp.x()))
         if not (self.scene() is None) :
             self.scene().update()
 
     def mouseDoubleClickEvent(self, event) :
         del self.waypoints[:]
+        del self.orientation[:]
         if not (self.scene() is None) :
             self.scene().update()
 
@@ -168,7 +176,7 @@ class TeleopGUI(QtWidgets.QMainWindow) :
         self.set_boxes()
 
         ### some control widget settings
-        keys = ['stop', 'joy', 'master', 'circular', 'waypoint']
+        keys = ['waypoint', 'stop', 'joy', 'master', 'circular', 'move_base']
         for i in range(N_ROBOT) :
             bot_topic = '/nubot'+str(i+1)+'/nubotcontrol/velcmd'
             foe_topic = '/rival'+str(i+1)+'/nubotcontrol/velcmd'
@@ -226,15 +234,18 @@ class TeleopGUI(QtWidgets.QMainWindow) :
             angle_rate = (bot_config[3][i], foe_config[3][i])
             self.bot_velpub[i].update(enabled[0], key=key[0], vmax=vm[0], angle_rate=angle_rate[0], vx=mvx, vy=mvy, w=mw, jvx=jvx, jvy=jvy, jw=jw)
             self.foe_velpub[i].update(enabled[1], key=key[1], vmax=vm[1], angle_rate=angle_rate[1], vx=mvx, vy=mvy, w=mw, jvx=jvx, jvy=jvy, jw=jw)
-            bot_err = self.bot_velpub[i].pidControl(self.bot_sub[i].target(), self.bot_sub[i].pose())
-            foe_err = self.foe_velpub[i].pidControl(self.foe_sub[i].target(), self.foe_sub[i].pose())
+            # here, velpub will compute local velocity save for itself and return error term
+            bot_err = self.bot_velpub[i].control(self.bot_sub[i].target(), self.bot_sub[i].pose())
+            foe_err = self.foe_velpub[i].control(self.foe_sub[i].target(), self.foe_sub[i].pose())
             MIN_ERROR = 10.0
+            # check for error term, if it's small enough, proceed to the next waypoint (target)
             if not (bot_err is None) :
                 if bot_err[0] < MIN_ERROR :
                     self.bot_sub[i].nextTarget()
             if not (foe_err is None) :
                 if foe_err[0] < MIN_ERROR :
                     self.foe_sub[i].nextTarget()
+            # publish velocity, automatically select appropriate vel by saved key
             self.bot_velpub[i].publish()
             self.foe_velpub[i].publish()
     
@@ -247,11 +258,13 @@ class TeleopGUI(QtWidgets.QMainWindow) :
 
     def save_yaml(self) :
         f = QtWidgets.QFileDialog.getSaveFileName()
-        waypoints = {'bot' : [], 'foe' : []}
+        waypoints = {'bot' : [], 'foe' : [], 'w' : {'bot' : [], 'foe' : []}}
         for i in range(len(self.bot_sub)) :
             waypoints['bot'].append([w for w in self.bot_sub[i].waypoints])
+            waypoints['w']['bot'].append([w for w in self.bot_sub[i].orientation])
         for i in range(len(self.foe_sub)) :
             waypoints['foe'].append([w for w in self.foe_sub[i].waypoints])
+            waypoints['w']['foe'].append([w for w in self.foe_sub[i].orientation])
         stream = file(f[0], 'w+')
         yaml.dump(waypoints, stream=stream)
         print yaml.dump(waypoints)
@@ -263,10 +276,10 @@ class TeleopGUI(QtWidgets.QMainWindow) :
         waypoints = yaml.load(stream)
         for i in range(len(waypoints['bot'])) :
             if len(waypoints['bot'][i]) :
-                self.bot_sub[i].setWaypoints(waypoints['bot'][i])
+                self.bot_sub[i].setWaypoints(waypoints['bot'][i],waypoints['w']['bot'][i])
         for i in range(len(waypoints['foe'])) :
             if len(waypoints['foe'][i]) :
-                self.foe_sub[i].setWaypoints(waypoints['foe'][i])
+                self.foe_sub[i].setWaypoints(waypoints['foe'][i],waypoints['w']['foe'][i])
         print waypoints
 
     def setWaypoints(self) :
@@ -274,12 +287,14 @@ class TeleopGUI(QtWidgets.QMainWindow) :
         if i < 0 :
             return
         wp = self.lines_item.waypoints
+        o = self.lines_item.orientation
         if i < 5 :
-            self.bot_sub[i].setWaypoints(wp)
+            self.bot_sub[i].setWaypoints(wp, o)
         else :
             i = i % len(self.foe_sub)
-            self.foe_sub[i].setWaypoints(wp)
+            self.foe_sub[i].setWaypoints(wp, o)
         del self.lines_item.waypoints[:]
+        del self.lines_item.orientation[:]
     
     def clearWaypoints(self) :
         i = self.ui.wp_comboBox.currentIndex()

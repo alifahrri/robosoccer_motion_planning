@@ -3,15 +3,16 @@ import gui.teleopgui as gui
 import rospy
 import sys
 
-import qdarkstyle
 modulename = 'qdarkstyle'
-
 from PyQt5 import QtWidgets, QtGui, QtCore
 
 if __name__ == '__main__' :
     app = QtWidgets.QApplication(sys.argv)
-    if modulename in sys.modules:
+    try:
+        import qdarkstyle
         app.setStyleSheet(qdarkstyle.load_stylesheet_pyqt5())
+    except ImportError:
+        pass
     teleop = gui.TeleopGUI()
     rospy.init_node('robosoccer_teleop')
     teleop.showMaximized()

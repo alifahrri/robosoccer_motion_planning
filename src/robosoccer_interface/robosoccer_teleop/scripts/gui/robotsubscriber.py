@@ -46,14 +46,16 @@ class RobotItem(QtWidgets.QGraphicsItem) :
         self.agent_id = id
         self.subscriber = RobotSubscriber(topic, id)
         self.flip = flip
-        self.waypoints = []
+        self.waypoints, self.orientation  = [], []
         self.wp_target = 0
 
-    def setWaypoints(self, wp) :
+    def setWaypoints(self, wp, o=[]) :
         del self.waypoints[:]
+        del self.orientation[:]
         self.wp_target = 0
         if not (wp is None) :
             self.waypoints = list(wp)
+            self.orientation = o + [0.0 for _ in range(len(wp)-len(o))]
 
     def nextTarget(self) :
         if self.waypoints is None : 
@@ -64,7 +66,8 @@ class RobotItem(QtWidgets.QGraphicsItem) :
         ret = None
         if (not (self.waypoints is None)) and (len(self.waypoints) > 0) :
             wp = self.waypoints[self.wp_target]
-            ret = (wp.x(), wp.y(), 0.0)
+            o = self.orientation[self.wp_target]
+            ret = (wp.x(), wp.y(), o)
         return ret
     
     def pose(self) :
@@ -121,6 +124,12 @@ class RobotItem(QtWidgets.QGraphicsItem) :
                 painter.setPen(pen)
                 painter.drawLine(robot_point, p1)
             painter.drawEllipse(p1, 10.0, 10.0)
+            if len(self.orientation) > i :
+                p = QtCore.QPointF(p1)
+                angle = self.orientation[i]
+                p.setX(p.x() + 30.0 * math.cos(angle))
+                p.setY(p.y() + 30.0 * math.sin(angle))
+                painter.drawLine(p1,p)
             font = painter.font()
             font.setPixelSize(12)
             painter.setFont(font)
