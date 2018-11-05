@@ -151,6 +151,7 @@ add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EX
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 add_executable(${PROJECT_NAME}_node src/robosoccer_motion_planning_node.cpp)
+add_executable(${PROJECT_NAME}_trajectory_node src/trajectory_generator_node.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -162,8 +163,15 @@ add_executable(${PROJECT_NAME}_node src/robosoccer_motion_planning_node.cpp)
 ## same as for the library above
 add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} nubot_common_generate_messages_cpp)
 
+add_dependencies(${PROJECT_NAME}_trajectory_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} nubot_common_generate_messages_cpp rrtsar_generate_messages_cpp)
+
 ## Specify libraries to link a library or executable target against
 target_link_libraries(${PROJECT_NAME}_node
+  ${catkin_LIBRARIES}
+  ${PROJECT_NAME}
+  )
+
+target_link_libraries(${PROJECT_NAME}_trajectory_node
   ${catkin_LIBRARIES}
   ${PROJECT_NAME}
   )

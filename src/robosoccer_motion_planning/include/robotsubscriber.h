@@ -42,10 +42,16 @@ public:
 public:
   RobotSubscriber(ros::NodeHandle &node, size_t robot_id, TEAM team);
   void callback(const nubot_common::OminiVisionInfo::ConstPtr &msg);
+  void rival_callback(const nubot_common::OminiVisionInfo::ConstPtr &msg);
   size_t numPublishers() { return sub.getNumPublishers(); }
   void publishTF();
   const auto& getState() const { return state; }
-  const auto& getObstacles() const { return obs; }
+  auto getObstacles() const {
+    decltype(obs) ret;
+    ret.insert(ret.begin(), obs.begin(), obs.end());
+    ret.insert(ret.end(), robs.begin(), robs.end());
+    return ret;
+  }
   const auto getHeading() const { return std::make_pair(heading, heading_rate); }
   const auto& getTF() const { return transform; }
   const auto& getName() const { return tf_name; }
@@ -53,7 +59,9 @@ private:
   tf::Transform transform;
   tf::TransformBroadcaster tf_broadcaster;
   ros::Subscriber sub;
-  std::vector<State> obs;
+  ros::Subscriber rsub; // subsriber for rival
+  std::vector<State> obs; // friend
+  std::vector<State> robs; // foe
   std::vector<State> obs_p0;
   std::vector<std::vector<State>> obs_history;
   std::vector<std::vector<ros::Time>> time_history;

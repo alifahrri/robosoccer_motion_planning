@@ -1,0 +1,9 @@
+"r" : 0.5
+"agent_id" : 1
+"target_size" : 75
+"environment": "dynamic"
+"collision_radius" : 1.35
+"direct_sampling" : true
+"direct_sampling_prob" : 0.1
+"max_angular_velocity" : 0.75
+"max_angular_acceleration" : 0.75

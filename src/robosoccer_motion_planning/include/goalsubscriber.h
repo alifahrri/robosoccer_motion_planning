@@ -17,12 +17,14 @@ public:
   void getGoal(auto &position);
   auto getGoal();
   auto getYaw();
+  auto goalChanged() { return goal_changed; }
 private:
   void set_time(auto &var);
   void callback(const geometry_msgs::PoseStampedConstPtr &msg);
 private:
   ros::Subscriber sub;
   geometry_msgs::PoseStamped goal;
+  bool goal_changed = true;
 };
 
 void GoalSubscriber::setGoal(auto &position)
@@ -34,12 +36,14 @@ void GoalSubscriber::setGoal(auto &position)
 void GoalSubscriber::getGoal(auto &pos)
 {
   set_xyz(goal.pose.position, pos);
+  goal_changed = false;
 }
 
 // this version simply return xyz and rpy
 auto GoalSubscriber::getGoal()
 {
   tf::Quaternion q;
+  goal_changed = false;
   tf::quaternionMsgToTF(goal.pose.orientation, q);
   return std::make_tuple(goal.pose.position.x, goal.pose.position.y, tf::getYaw(q));
 }
@@ -47,6 +51,7 @@ auto GoalSubscriber::getGoal()
 auto GoalSubscriber::getYaw()
 {
   tf::Quaternion q;
+  goal_changed = false;
   tf::quaternionMsgToTF(goal.pose.orientation, q);
   return tf::getYaw(q);
 }

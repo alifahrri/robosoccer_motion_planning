@@ -10,6 +10,7 @@ GoalSubscriber::GoalSubscriber(ros::NodeHandle &node, std::string topic)
 
 void GoalSubscriber::callback(const geometry_msgs::PoseStampedConstPtr &msg)
 {
+  goal_changed = true;
   goal.header = msg->header;
   goal.pose = msg->pose;
 }
