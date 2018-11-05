@@ -50,7 +50,7 @@ done:
   return ctrl_seq;
 }
 
-Trajectory1D::State Controller::getState(const Controller::Control &ctrl, double time)
+Trajectory1D::State Controller::getState(const Controller::Control &ctrl, double time, double *effort)
 {
   State s;
   double t = 0.0;
@@ -60,6 +60,7 @@ Trajectory1D::State Controller::getState(const Controller::Control &ctrl, double
     for(int i=1; i<ctrl.size(); ++i)
     {
       auto c = ctrl.at(i);
+      if(effort) *effort = c.effort;
       t += c.time;
       auto s0 = ctrl.at(i-1).term; // prev state
       if(time < t)
@@ -74,20 +75,23 @@ Trajectory1D::State Controller::getState(const Controller::Control &ctrl, double
   else {
     s.w = ctrl.distance;
     s.dw = 0.0;
+    if(effort) *effort = 0.0;
   }
   return s;
 }
 
-Controller::Trajectory Controller::getTrajectory(const Controller::Control &ctrl, double t0, double tf, int n)
+Controller::Trajectory Controller::getTrajectory(const Controller::Control &ctrl, double t0, double tf, int n, std::vector<double> *inputs)
 {
   auto dt = (tf-t0)/n;
   Trajectory trajectory;
   for(size_t i=1; i<=n; i++)
   {
     double now = (double)i*dt;
-    auto s = getState(ctrl, now);
+    double effort;
+    auto s = getState(ctrl, now, &effort);
     trajectory.first.push_back(s);
     trajectory.second.push_back(t0 + now);
+    if(inputs) inputs->push_back(effort);
   }
   if(trajectory.first.empty())
   {
@@ -335,9 +339,9 @@ Controller::Control AngleController::angleControl(State init_state, double final
   return optimalControl({init_state.w+f_offset, init_state.dw}, final_state+t_offset, final_time);
 }
 
-Controller::Trajectory AngleController::getAngleTrajectory(const Controller::Control &ctrl, const AngleController::AngleOffset &offset, double t0, double tf, int n)
+Controller::Trajectory AngleController::getAngleTrajectory(const Controller::Control &ctrl, const AngleController::AngleOffset &offset, double t0, double tf, int n, std::vector<double> *inputs)
 {
-  auto trajectory = getTrajectory(ctrl, t0, tf, n);
+  auto trajectory = getTrajectory(ctrl, t0, tf, n, inputs);
   for(auto &t : trajectory.first) {
     t.w -= offset.f_offset;
     if(t.w > M_PI)

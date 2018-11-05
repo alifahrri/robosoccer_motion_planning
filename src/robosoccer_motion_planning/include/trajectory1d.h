@@ -49,8 +49,8 @@ public:
   void setLimit(double vmax=1.0, double amax=1.0);
   Controller::Control optimalControl(State init_state, double final_state, double& final_time);
 
-  static State getState(const Controller::Control &ctrl, double time);
-  static Trajectory getTrajectory(const Controller::Control& ctrl, double t0, double tf, int n);
+  static State getState(const Controller::Control &ctrl, double time, double *effort=nullptr);
+  static Trajectory getTrajectory(const Controller::Control& ctrl, double t0, double tf, int n, std::vector<double> *inputs=nullptr);
   static Trajectory getTrajectory(const Controller::Control& ctrl, double t0, double tf, double dt);
   static double setMaxEffort(Controller::Control &ctrl, double amax);
 
@@ -81,7 +81,7 @@ public:
   AngleController();
   Controller::Control angleControl(State init_state, double final_state, double& final_time);
 public:
-  static Trajectory getAngleTrajectory(const Control &ctrl, const AngleOffset &offset, double t0, double tf, int n);
+  static Trajectory getAngleTrajectory(const Control &ctrl, const AngleOffset &offset, double t0, double tf, int n, std::vector<double> *inputs = nullptr);
   static Trajectory getAngleTrajectory(const Control &ctrl, const AngleOffset &offset, double t0, double tf, double dt);
 public:
   double shortest_path(double from, double to, double &f_offset, double &t_offset);
