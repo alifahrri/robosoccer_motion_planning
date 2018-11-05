@@ -1,0 +1,22 @@
+<?xml version="1.0" ?>
+<robot name="nubot1">
+  <link name="nubot1__chassis">
+    <inertial>
+      <mass value="31"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <inertia ixx="100" ixy="0" ixz="0" iyy="100" iyz="0" izz="2.86"/>
+    </inertial>
+    <collision name="nubot1__collision">
+      <origin rpy="0 0 0" xyz="0   0   0.01"/>
+      <geometry>
+        <mesh filename="package://nubot_description/meshes/nubot_frame_collision.dae" scale="1.5 1.5 1.6"/>
+      </geometry>
+    </collision>
+    <visual name="nubot1__visual">
+      <origin rpy="0 0 0" xyz="0   0   0.01"/>
+      <geometry>
+        <mesh filename="package://nubot_description/meshes/nubot_frame/nubot_frame1.dae" scale="1.5 1.5 1.6"/>
+      </geometry>
+    </visual>
+  </link>
+</robot>

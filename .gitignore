@@ -8,3 +8,6 @@ build/*
 *.o
 src/robosoccer_trajectory_tracking/scripts/tracker.c
 src/robosoccer_trajectory_tracking/scripts/tracker.cpp
+src/robosoccer_trajectory_tracking/scripts/cython_tracker.cpp
+src/rqt_graph/*
+rosgraph2.dot
