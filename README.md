@@ -1,5 +1,5 @@
 ## Kinodynamic Motion Planning in Dynamic Environment for robot soccer
-![demo gif](https://bitbucket.org/alifahrri/robosoccer_motion_planning_ws/src/master/demo_short2.gif)  
+![gif](demo_short2.gif)  
 click [here](https://youtu.be/jYTKOSrrcoY) to view full video  
 
 ### You'll need :
