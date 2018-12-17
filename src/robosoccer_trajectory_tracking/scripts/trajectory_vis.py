@@ -31,6 +31,9 @@ import nubot_common.msg as msg
 import rosgraph_msgs.msg as rosmsg
 import robosoccer_trajectory_tracking.msg as trackmsg
 
+# for measuring rate
+import rostopic
+
 class ControlInfoSubscriber() :
   def __init__(self, topic) :
     self.sub = rospy.Subscriber(topic,trackmsg.ControlInfo,callback=self.callback,queue_size=3)
@@ -396,7 +399,7 @@ class ApplicationWindow(QtWidgets.QMainWindow):
         if check_length([plan_data['pos'], plan_data['vel'], states['pos'], states['vel'], error_data['p'], error_data['i']]) :
           mplplot(self.plot_widget['pos'],data=states['pos'],dash=plan_data['pos'],range=xlim,label=(['x','y','w'],['x(plan)','y(plan)','w(plan)']))
           mplplot(self.plot_widget['vel'],data=states['vel'],dash=plan_data['vel'],range=xlim,label=(['vx(control)','vy(control)','vw(control)'],['vx(plan)','vy(plan)','vw(plan)']))
-          mplplot(self.plot_widget['err'],data=error_data['i'],dash=error_data['p'],range=xlim,label=(['ex(sum)','ey(sum)','ew(sum)'],['ex','ey','ew']))
+          mplplot(self.plot_widget['err'],data=error_data['p'],range=xlim,label=(['ex','ey','ew'],[]))
 
 
 if __name__ == '__main__' :
