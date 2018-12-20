@@ -7,3 +7,6 @@
 [submodule "src/pysdf"]
 	path = src/pysdf
 	url = https://github.com/alifahrri/pysdf.git
+[submodule "src/gazebo_visual"]
+	path = src/gazebo_visual
+	url = https://github.com/alifahrri/gazebo_visual.git
