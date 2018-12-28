@@ -9,6 +9,7 @@ Read the [thesis](https://bitbucket.org/alifahrri/bachelor-thesis/src/master/bui
 - ROS
 - gcc >= 7 (for C++17)
 - Cython
+- [google benchmark](https://github.com/google/benchmark)
 
 ### Cloning  
 do recursive cloning :   
@@ -26,6 +27,16 @@ catkin_make -j1
 run unit test setting from catkin
 ```
 catkin_make -j1 run_tests
+```
+
+### Run Benchmark
+use google benchmark settings 
+```
+rosrun rrtstar rrtstar_benchmark
+```
+custom settings (report min, max, mean also prints individual test results)
+```
+rosrun rrtstar rrtstar_custom_benchmark
 ```
 
 ### Nodes
