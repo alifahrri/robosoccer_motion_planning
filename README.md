@@ -22,6 +22,12 @@ standard ROS build, but it is recommended to use only single thread since it wil
 catkin_make -j1
 ```
 
+### Running Unit Tests
+run unit test setting from catkin
+```
+catkin_make -j1 run_tests
+```
+
 ### Nodes
 * the core of the motion planning algorithm `robosoccer_motion_planning/src/robosoccer_motion_planning_node`
 * trajectory tracking node for robot soccer `robosoccer_trajectory_tracking/scripts/trajectory_cytracker.py` 
