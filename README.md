@@ -40,14 +40,14 @@ rosrun rrtstar rrtstar_custom_benchmark
 ```
 
 ### Performance   
-tested on intel i3   
+tested on intel i3 2.0 GHz   
 
-|               computation time | solution cost                  |
-|-------------------------------:|--------------------------------|
+| computation time               | solution cost                  |
+|--------------------------------|--------------------------------|
 | ![time_plot.png](time_plot.png) | ![cost_plot.png](cost_plot.png) |  
    
 |                                                       no direct sampling | direct sampling with prob = `0.1`                                      |
-|-------------------------------------------------------------------------:|------------------------------------------------------------------------|
+|--------------------------------------------------------------------------|------------------------------------------------------------------------|
 | ![direct_sample_disabled_boxplot.png](direct_sample_disabled_boxplot.png) | ![direct_sample_enabled_boxplot.png](direct_sample_enabled_boxplot.png) |
 
 ### Nodes
