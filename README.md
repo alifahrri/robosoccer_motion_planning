@@ -39,6 +39,17 @@ custom settings (report min, max, mean also prints individual test results)
 rosrun rrtstar rrtstar_custom_benchmark
 ```
 
+### Performance   
+tested on intel i3   
+
+|               computation time | solution cost                  |
+|-------------------------------:|--------------------------------|
+| [time_plot.png](time_plot.png) | [cost_plot.png](cost_plot.png) |  
+   
+|                                                       no direct sampling | direct sampling with prob = `0.1`                                      |
+|-------------------------------------------------------------------------:|------------------------------------------------------------------------|
+| [direct_sample_disabled_boxplot.png](direct_sample_disabled_boxplot.png) | [direct_sample_enabled_boxplot.png](direct_sample_enabled_boxplot.png) |
+
 ### Nodes
 * the core of the motion planning algorithm `robosoccer_motion_planning/src/robosoccer_motion_planning_node`
 * trajectory tracking node for robot soccer `robosoccer_trajectory_tracking/scripts/trajectory_cytracker.py` 
