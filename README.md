@@ -1,6 +1,6 @@
 ## Kinodynamic Motion Planning in Dynamic Environment for robot soccer
-| ![demo_short.gif](demo_short.gif) 	| ![demo_short2.gif](demo_short2.gif) 	| ![demo_short3.gif](demo_short3.gif) 	|
-|----------------------------------:	|------------------------------------	|------------------------------------	|  
+| ![demo_short.gif](demo_short.gif) 	| ![viz.gif](viz.gif) 	| 
+|----------------------------------:	|------------------------------------	|
   
 click [here](https://youtu.be/jYTKOSrrcoY) to view full video. Or [here](https://www.youtube.com/playlist?list=PL2Kn-ntDzDZsU3pb30TBWnRmIcATtSVu8) for more videos.  
 
