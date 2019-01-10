@@ -16,7 +16,7 @@ Read the [thesis](https://bitbucket.org/alifahrri/bachelor-thesis/src/master/bui
 ### Cloning  
 do recursive cloning :   
 ```
-git clone --recursive https://alifahrri@bitbucket.org/alifahrri/robosoccer_motion_planning_ws.git
+git clone --recursive https://github.com/alifahrri/robosoccer_motion_planning.git
 ```
 
 ### Building 
